@@ -4,12 +4,13 @@ import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Up
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
 import { useWorkspace } from './useWorkspace'
 import type { LearningEvent } from './types'
-const {courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+const {showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
 const showUpload=ref(false),showSettings=ref(false),sidebar=ref(false),dragging=ref(false),fileInput=ref<HTMLInputElement|null>(null)
 const editEvent=ref<LearningEvent|null>(null),editText=ref('')
 const activeEvents=computed(()=>course.value?.events??[])
 const understanding=computed(()=>activeEvents.value.some(e=>e.unit_id===unit.value?.id&&e.kind==='understood'))
+const nextLearningUnit=computed(()=>course.value?.units.slice(index.value+1).find(u=>u.category==='learn'||!u.category))
 const modeLabel=computed(()=>lesson.value?.mode==='ai'?'AI 讲解':lesson.value?.mode==='demo'?'内置体验材料':'原文导读')
 const actionLabels:Record<string,string>={answer:'围绕你的问题',clarify:'先弄清卡在哪里',reexplain:'换一种讲法',worked_example:'用一个例子理解',step_diagram:'我们分步看',micro_exercise:'试着用一下'}
 const eventLabels:Record<string,string>={understood:'自述已理解',confused:'待解疑问',practice:'练习记录',skip:'已跳过',correction:'你的更正',note:'学习笔记'}
@@ -40,6 +41,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <div class="sidebar-label">你的学习路径 <button class="icon-btn" @click="sidebar=false" aria-label="收起目录"><PanelLeftClose :size="16"/></button></div>
           <div class="course-mini-cover"><span class="eyebrow">LEARNING JOURNEY</span><BookOpen :size="32" :stroke-width="1.3"/><h2>{{course.title}}</h2><span>{{course.units.length}} 个学习单元 · 随时开始</span><div class="cover-orbit orbit-one"></div><div class="cover-orbit orbit-two"></div></div>
           <div class="course-selector"><select aria-label="切换课程" :value="course.id" @change="guard(()=>openCourse(($event.target as HTMLSelectElement).value))"><option v-for="c in courses" :key="c.id" :value="c.id">{{c.title}}</option></select><ChevronDown :size="14"/></div>
+          <div class="path-controls"><button class="text-btn" @click="showExtras=!showExtras">{{showExtras?'收起导读与附属内容':'查看导读与附属内容'}}</button><button class="text-btn" @click="curate" :disabled="busy||!health.model_configured">根据原文优化路径</button><small>正文优先；导读和致谢仍可查看。</small></div>
           <div class="chapter-list"><div v-for="chapter in chapters" :key="chapter.number" class="chapter-group"><h3><span>{{String(chapter.number).padStart(2,'0')}}</span>{{chapter.title}}</h3><button v-for="u in chapter.units" :key="u.id" class="unit-link" :class="{active:unit?.id===u.id}" @click="selectUnit(u);sidebar=false"><span class="unit-state" :class="{prepared:u.ready}"><BookOpen v-if="unit?.id===u.id" :size="13"/><span v-else></span></span><span>{{u.title}}<small>{{unit?.id===u.id?'正在学习':u.ready?'已准备':'按需准备'}}</small></span><ChevronRight v-if="unit?.id===u.id" :size="14"/></button></div></div>
           <div class="sidebar-bottom"><Leaf :size="16"/><p>不用赶进度。<br/>每次弄懂一点，就很好。</p></div>
         </aside>
@@ -47,6 +49,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
         <main class="lesson-content" v-if="unit" @mouseup="selectText">
           <div class="lesson-kicker"><span class="pill">{{modeLabel}}</span><span><Clock3 :size="13"/>约 {{unit.minutes}} 分钟</span><span>{{index+1}} / {{course.units.length}} 节</span></div>
           <h1>{{unit.title}}</h1>
+          <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
           <template v-if="lesson">
@@ -55,7 +58,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
               <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint})"/>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>
-            <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="course.units[index+1]" @click="selectUnit(course.units[index+1]!)">继续下一节 <ArrowRight :size="16"/></button></div></div>
+            <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
           </template>
           <div v-else class="prepare-card"><span class="round-icon"><Sparkles :size="27"/></span><h2>只准备你现在想学的</h2><p>从这一节开始，保留来源，慢慢往前走。<br/>{{health.model_configured?'DeepSeek 会根据原文准备本节讲解。':'当前可先阅读原文，连接模型后再生成讲解。'}}</p><button class="button primary" @click="prepare" :disabled="busy"><LoaderCircle v-if="busy" class="spin" :size="17"/><BookOpen v-else :size="17"/>{{busy?'正在准备…':'开始这一节'}}</button></div>
           <p class="footer-note">由你决定下一步 · 练习不会限制章节进度</p>

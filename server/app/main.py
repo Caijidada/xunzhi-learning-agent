@@ -63,6 +63,13 @@ def create_app(settings=None, gateway=None):
         store.unit(course_id, req.unit_id)
         return service.submit(f"turn:{course_id}:{req.request_id}", "tutor", {"course_id": course_id, "request": req.model_dump()})
 
+    @app.post('/api/courses/{course_id}/curriculum', status_code=202)
+    async def curriculum(course_id: str):
+        store.get('courses', course_id)
+        if not settings.configured:
+            raise AppError('请先配置模型，再结合原文优化学习路径', 'MODEL_NOT_CONFIGURED', 503)
+        return service.submit(f'curriculum:{course_id}:v1', 'curriculum', {'course_id': course_id})
+
     @app.patch("/api/courses/{course_id}/progress")
     def progress(course_id: str, req: ProgressRequest):
         return store.move(course_id, req)

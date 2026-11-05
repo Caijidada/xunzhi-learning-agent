@@ -41,6 +41,18 @@ class TeachingChoice(BaseModel):
     success_signal: str = Field(max_length=300, description="什么可观察的表现能够支持理解，不能声称已掌握")
 
 
+class RouteChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    unit_id: str
+    category: Literal['learn', 'guide', 'skip']
+    reason: str = Field(min_length=1, max_length=300)
+
+
+class CurriculumReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    choices: list[RouteChoice] = Field(min_length=1, max_length=20)
+
+
 class TutorResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal["answer", "clarify", "reexplain", "worked_example", "step_diagram", "micro_exercise"]

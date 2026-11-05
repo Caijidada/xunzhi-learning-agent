@@ -116,6 +116,22 @@ def test_invalid_upload_rejected(client):
     assert client.post('/api/documents',files={'file':('x.pdf',b'not a pdf','application/pdf')}).status_code==400
 
 
+def test_curriculum_routes_existing_content_without_losing_progress(client):
+    store=client.app.state.store
+    with store.connection() as db:
+        row=db.execute('SELECT data FROM units WHERE id=?',('demo_unit_1',)).fetchone()
+        unit=json.loads(row[0]); unit['title']='致谢'
+        db.execute('UPDATE units SET data=? WHERE id=?',(json.dumps(unit),'demo_unit_1'))
+    course=client.get('/api/courses/course_demo').json()
+    assert course['units'][0]['category']=='skip'
+    assert course['progress']['unit_id']=='demo_unit_1'
+    assert client.get('/api/courses/course_demo/units/demo_unit_1').json()['lesson']
+    course_data=store.get('courses','course_demo')
+    course_data['curriculum']={'demo_unit_1':{'category':'learn','reason':'原文包含核心知识'}}
+    store.put('courses','course_demo',course_data)
+    assert client.get('/api/courses/course_demo').json()['units'][0]['category']=='learn'
+
+
 def test_event_request_id_cannot_overwrite_memory(client):
     req={'request_id':'memory-dedup-01','unit_id':'demo_unit_1','kind':'note','text':'first'}
     first=client.post('/api/courses/course_demo/learning-events',json=req)

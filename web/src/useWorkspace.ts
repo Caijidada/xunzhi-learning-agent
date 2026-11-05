@@ -10,9 +10,12 @@ export function useWorkspace() {
   const plan = ref<{tasks:{title:string;description:string;minutes:number}[]}>({tasks:[]})
   const busy = computed(() => !!job.value && ['queued','running'].includes(job.value.status))
   const index = computed(() => course.value?.units.findIndex(u=>u.id===unit.value?.id) ?? 0)
+  const showExtras = ref(false)
+  const learningUnits = computed(() => course.value?.units.filter(u=>u.category==='learn'||!u.category) ?? [])
   const chapters = computed(() => {
     const groups: {number:number;title:string;units:Unit[]}[] = []
     for (const u of course.value?.units ?? []) {
+      if(!showExtras.value && u.category && u.category!=='learn') continue
       let group = groups.find(g=>g.number===u.chapter)
       if (!group) { group = {number:u.chapter,title:u.chapter_title,units:[]}; groups.push(group) }
       group.units.push(u)
@@ -81,6 +84,13 @@ export function useWorkspace() {
       if(['completed','cancelled'].includes(done.status)) localStorage.removeItem('xunzhi.pending')
     } catch(e) { error.value = e instanceof Error ? e.message : '连接中断，重新打开后可以继续。' }
   }
+  async function curate() {
+    if(!course.value || busy.value) return
+    await guard(async()=>{
+      const j=await api<Job>(`/courses/${course.value!.id}/curriculum`,{method:'POST'})
+      await watchJob(j,{courseId:course.value!.id})
+    })
+  }
   async function prepare() {
     if(!course.value || !unit.value || busy.value) return
     await guard(async()=>{
@@ -144,6 +154,6 @@ export function useWorkspace() {
     loading.value=false
   })
   onUnmounted(()=>{alive=false})
-  return {courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+  return {showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

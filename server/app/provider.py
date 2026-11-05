@@ -55,13 +55,18 @@ class ModelGateway:
                     text = data["choices"][0]["message"]["content"]
                     value = schema.model_validate_json(text)
                     allowed = {s["id"] for s in context.get("sources", [])}
-                    for block in value.blocks:
+                    for block in getattr(value, 'blocks', []):
                         if not set(block.source_ids).issubset(allowed):
                             raise ValueError("引用 ID 不在提供的材料中")
                         if not block.source_ids and getattr(value, "action", "") != "clarify":
                             raise ValueError("教学内容需要来源 ID")
                     if getattr(value, "action", "") == "step_diagram" and not any(b.type == "diagram" for b in value.blocks):
                         raise ValueError("step_diagram 动作需要实际图解")
+                    if hasattr(value, 'choices'):
+                        expected = {u['unit_id'] for u in context['units']}
+                        actual = [c.unit_id for c in value.choices]
+                        if set(actual) != expected or len(actual) != len(expected):
+                            raise ValueError('课程筛选必须覆盖且仅覆盖给定单元')
                     return value.model_dump(), {"model": self.settings.model, "calls": attempt + 1,
                                                "duration_ms": round((time.monotonic() - started) * 1000), "usage": usage}
                 except (ValidationError, ValueError, KeyError, IndexError, TypeError):

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Upload, X, Sparkles, Clock3, Bookmark, Check, MessageCircle, Send, FileText, Settings2, CircleHelp, Layers3, Leaf, Library, History, RotateCcw, LoaderCircle, PanelLeftClose, Menu, Quote, Lightbulb, SlidersHorizontal } from '@lucide/vue'
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
+import SceneDialog from './components/SceneDialog.vue'
 import { useWorkspace } from './useWorkspace'
 import type { Block, LearningEvent } from './types'
 const {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
@@ -9,7 +10,6 @@ const {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,tur
 const showUpload=ref(false),showSettings=ref(false),sidebar=ref(false),dragging=ref(false),fileInput=ref<HTMLInputElement|null>(null)
 const activeScene=ref<Block|null>(null)
 watch(()=>unit.value?.id,()=>{activeScene.value=null})
-function explainBlock(b:Block,visual=false){selected.value=[b.title,b.body,...(b.steps??[]).map(s=>s.label+': '+s.detail)].join('\n').slice(0,3000);send(visual?'diagram':'confused',visual?'请解释选中的内容；如果动态场景有助于理解，请在演示区展示关键关系或状态变化，否则用更合适的方法。':'这段我没有理解，请判断难点并换一种更清楚的讲法。')}
 const editEvent=ref<LearningEvent|null>(null),editText=ref('')
 const activeEvents=computed(()=>course.value?.events??[])
 const understanding=computed(()=>activeEvents.value.some(e=>e.unit_id===unit.value?.id&&e.kind==='understood'))
@@ -45,7 +45,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <div class="sidebar-label">你的学习路径 <button class="icon-btn" @click="sidebar=false" aria-label="收起目录"><PanelLeftClose :size="16"/></button></div>
           <div class="course-mini-cover"><span class="eyebrow">LEARNING JOURNEY</span><BookOpen :size="32" :stroke-width="1.3"/><h2>{{course.title}}</h2><span>{{course.units.length}} 个学习单元 · 随时开始</span><div class="cover-orbit orbit-one"></div><div class="cover-orbit orbit-two"></div></div>
           <div class="course-selector"><select aria-label="切换课程" :value="course.id" @change="guard(()=>openCourse(($event.target as HTMLSelectElement).value))"><option v-for="c in courses" :key="c.id" :value="c.id">{{c.title}}</option></select><ChevronDown :size="14"/></div>
-          <div class="path-controls"><button class="text-btn" @click="showExtras=!showExtras">{{showExtras?'收起导读与附属内容':'查看导读与附属内容'}}</button><button class="text-btn" @click="curate" :disabled="busy||!health.model_configured">根据原文优化路径</button><small>正文优先；导读和致谢仍可查看。</small></div>
+          <div class="path-controls"><button class="text-btn" @click="showExtras=!showExtras">{{showExtras?'收起导读与附属内容':'查看导读与附属内容'}}</button><button class="text-btn" @click="curate" :disabled="busy||!health.model_configured">根据原文优化路径</button></div>
           <div class="chapter-list"><div v-for="chapter in chapters" :key="chapter.number" class="chapter-group"><h3><span>{{String(chapter.number).padStart(2,'0')}}</span>{{chapter.title}}</h3><button v-for="u in chapter.units" :key="u.id" class="unit-link" :class="{active:unit?.id===u.id}" @click="selectUnit(u);sidebar=false"><span class="unit-state" :class="{prepared:u.ready}"><BookOpen v-if="unit?.id===u.id" :size="13"/><span v-else></span></span><span>{{u.title}}<small>{{unit?.id===u.id?'正在学习':u.ready?'已准备':'按需准备'}}</small></span><ChevronRight v-if="unit?.id===u.id" :size="14"/></button></div></div>
           <div class="sidebar-bottom"><Leaf :size="16"/><p>不用赶进度。<br/>每次弄懂一点，就很好。</p></div>
         </aside>
@@ -55,14 +55,12 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <h1>{{unit.title}}</h1>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
-          <section v-if="activeScene" class="active-demonstration"><div class="demo-heading"><strong>围绕你的问题，换个角度看</strong><button class="text-btn" @click="activeScene=null">收起演示</button></div><KnowledgeBlock :block="activeScene" @source="openSource"/></section>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
           <template v-if="lesson">
             <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
             <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
               <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint,lesson_revision:lesson?.revision??0})"/>
-              <div class="block-help"><button class="text-btn" :disabled="busy" @click.stop="explainBlock(b)">帮我理解这段</button><button class="text-btn" :disabled="busy" @click.stop="explainBlock(b,true)">在演示区讲解</button></div>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>
             <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
@@ -92,6 +90,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
 
     <main v-else class="empty-state"><h1>暂时没有打开课程</h1><p>检查服务连接，或导入一份 PDF 开始。</p><button class="button primary" @click="showUpload=true">导入资料</button></main>
 
+    <SceneDialog v-if="activeScene" :block="activeScene" @close="activeScene=null"/>
     <div v-if="showUpload" class="modal-backdrop" @click.self="showUpload=false"><section class="modal upload-modal" role="dialog" aria-modal="true" aria-label="导入学习资料"><button class="modal-close icon-btn" @click="showUpload=false" aria-label="关闭"><X :size="20"/></button><span class="eyebrow">START WITH SOMETHING CURIOUS</span><h2>把想学的，放进来。</h2><p>先整理目录，再准备你想学的那一节。</p><div class="drop-zone" :class="{dragging}" @dragover.prevent="dragging=true" @dragleave.prevent="dragging=false" @drop.prevent="onDrop" @click="fileInput?.click()" role="button" tabindex="0" @keydown.enter="fileInput?.click()"><span><Upload :size="28" :stroke-width="1.4"/></span><strong>拖放 PDF 到这里</strong><p>或点击选择文件</p><small>支持文本型 PDF · 最大 50 MB / 600 页</small></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" @change="handleFile(($event.target as HTMLInputElement).files?.[0])"/><div class="upload-note"><BookOpen :size="17"/><p>扫描页、图表或公式可能无法完整提取。导入后会显示缺漏情况，并保留查看原文的入口。</p></div></section></div>
 
     <div v-if="source" class="modal-backdrop source-backdrop" @click.self="source=null"><section class="source-drawer" role="dialog" aria-modal="true" aria-label="原文出处"><div class="drawer-heading"><span><BookOpen :size="19"/>原文出处</span><button class="icon-btn" @click="source=null" aria-label="关闭出处"><X :size="19"/></button></div><span class="pill">{{course?.demo?'自编体验材料':`文件第 ${source.page+1} 页`}}</span><h2>{{source.title}}</h2><p class="source-document">{{course?.document.title}}</p><blockquote>{{source.text}}</blockquote><a v-if="!course?.demo" class="button primary" :href="`/api/documents/${course?.document_id}/file#page=${source.page+1}`" target="_blank" rel="noopener">打开 PDF 原页 <ArrowUpRight :size="16"/></a><p v-else class="source-note">这段内容为项目内置示例，不是你上传的教材摘录。</p></section></div>

@@ -4,7 +4,7 @@ import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Up
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
 import { useWorkspace } from './useWorkspace'
 import type { LearningEvent } from './types'
-const {showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+const {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
 const showUpload=ref(false),showSettings=ref(false),sidebar=ref(false),dragging=ref(false),fileInput=ref<HTMLInputElement|null>(null)
 const editEvent=ref<LearningEvent|null>(null),editText=ref('')
@@ -53,9 +53,10 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
           <template v-if="lesson">
+            <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
-            <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
-              <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint})"/>
+            <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
+              <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint,lesson_revision:lesson.revision??0})"/>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>
             <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>

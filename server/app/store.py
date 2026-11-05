@@ -29,6 +29,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS courses(id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, position INTEGER NOT NULL, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS lessons(unit_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS lesson_versions(unit_id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(unit_id,revision));
             CREATE TABLE IF NOT EXISTS progress(course_id TEXT PRIMARY KEY, unit_id TEXT NOT NULL, block_index INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL, request_id TEXT UNIQUE NOT NULL, superseded INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
@@ -114,6 +115,22 @@ class Store:
         if not r:
             raise AppError("课程不存在", "NOT_FOUND", 404)
         return dict(r)
+
+    def replace_lesson(self, course_id, unit_id, lesson, expected_revision):
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT data FROM lessons WHERE unit_id=?', (unit_id,)).fetchone()
+            old = json.loads(row[0]) if row else None
+            if not old or old.get('revision', 0) != expected_revision:
+                raise AppError('讲解已变化，请刷新后重试', 'VERSION_CONFLICT', 409)
+            db.execute('INSERT OR IGNORE INTO lesson_versions VALUES(?,?,?)', (unit_id, expected_revision, encode(old)))
+            lesson['revision'] = expected_revision + 1
+            db.execute('UPDATE lessons SET data=? WHERE unit_id=?', (encode(lesson), unit_id))
+            db.execute('UPDATE progress SET block_index=0,version=version+1 WHERE course_id=? AND unit_id=?', (course_id, unit_id))
+
+    def lesson_versions(self, unit_id):
+        with self.connection() as db:
+            return [json.loads(r[0]) for r in db.execute('SELECT data FROM lesson_versions WHERE unit_id=? ORDER BY revision DESC', (unit_id,))]
 
     def move(self, course_id, req):
         self.unit(course_id, req.unit_id)

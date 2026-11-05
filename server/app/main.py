@@ -9,7 +9,7 @@ from .config import Settings, ROOT
 from .store import Store, uid
 from .service import LearningService
 from .demo import seed_demo
-from .domain import AppError, TurnRequest, ProgressRequest, EventRequest
+from .domain import AppError, TurnRequest, ProgressRequest, EventRequest, RegenerateRequest
 
 
 def create_app(settings=None, gateway=None):
@@ -63,6 +63,19 @@ def create_app(settings=None, gateway=None):
         store.unit(course_id, req.unit_id)
         return service.submit(f"turn:{course_id}:{req.request_id}", "tutor", {"course_id": course_id, "request": req.model_dump()})
 
+    @app.post('/api/courses/{course_id}/units/{unit_id}/regenerate', status_code=202)
+    async def regenerate(course_id: str, unit_id: str, req: RegenerateRequest):
+        store.unit(course_id, unit_id)
+        if not settings.configured:
+            raise AppError('请先配置模型', 'MODEL_NOT_CONFIGURED', 503)
+        return service.submit(f'regenerate:{course_id}:{unit_id}:{req.request_id}', 'regenerate',
+                              {'course_id': course_id, 'unit_id': unit_id, 'expected_revision': req.expected_revision})
+
+    @app.get('/api/courses/{course_id}/units/{unit_id}/versions')
+    def versions(course_id: str, unit_id: str):
+        store.unit(course_id, unit_id)
+        return store.lesson_versions(unit_id)
+
     @app.post('/api/courses/{course_id}/curriculum', status_code=202)
     async def curriculum(course_id: str):
         store.get('courses', course_id)
@@ -89,12 +102,14 @@ def create_app(settings=None, gateway=None):
             raise AppError("更正需要指定原记录")
         if req.kind == "practice":
             lesson = store.lesson(req.unit_id)
+            if lesson and lesson.get('revision', 0) != req.lesson_revision:
+                raise AppError('练习内容已更新，请刷新后再回答', 'VERSION_CONFLICT', 409)
             if not lesson or req.block_index is None or req.block_index >= len(lesson["blocks"]):
                 raise AppError("练习不存在")
             block = lesson["blocks"][req.block_index]
             if block["type"] != "quiz" or req.choice is None or not 0 <= req.choice < len(block["options"]):
                 raise AppError("练习提交无效")
-            data.update({"correct": req.choice == block["answer"], "choice": req.choice, "block_index": req.block_index,
+            data.update({"lesson_revision": req.lesson_revision, "correct": req.choice == block["answer"], "choice": req.choice, "block_index": req.block_index,
                          "text": req.text or block["body"]})
         event_id = store.add_event(course_id, req.unit_id, req.kind, data, f"{course_id}:{req.request_id}", req.target_id)
         return {"id": event_id, "data": data}

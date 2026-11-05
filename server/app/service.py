@@ -55,7 +55,7 @@ class LearningService:
         job = self.store.job(job_id)
         self.store.update_job(job_id, "running", "正在准备")
         try:
-            handler = {"import": self._import, "prepare": self._prepare, "tutor": self._tutor, "curriculum": self._curriculum}[job["kind"]]
+            handler = {"import": self._import, "prepare": self._prepare, "tutor": self._tutor, "curriculum": self._curriculum, "regenerate": self._regenerate}[job["kind"]]
             result = await handler(job_id, job["payload"])
             self.store.update_job(job_id, "completed", "已完成", result=result)
         except asyncio.CancelledError:
@@ -122,6 +122,24 @@ class LearningService:
         draft["status"] = "ready"
         self.store.save_lesson(unit["id"], draft)
         return {"unit_id": unit["id"]}
+
+    async def _regenerate(self, job_id, payload):
+        course = self.store.get('courses', payload['course_id'])
+        unit = self.store.unit(course['id'], payload['unit_id'])
+        previous = self.store.lesson(unit['id'])
+        if previous and previous.get('generation_job') == job_id:
+            return {'unit_id': unit['id']}
+        if not previous or previous.get('revision', 0) != payload['expected_revision']:
+            raise AppError('讲解已变化，请刷新后重试', 'VERSION_CONFLICT', 409)
+        chunks = self.store.chunks(course['document_id'])
+        selected = [c for c in chunks if c['id'] in set(unit['source_ids'])][:7]
+        self.store.update_job(job_id, 'running', '正在重新组织讲解，原内容仍可阅读')
+        lesson, metrics = await self.gateway.generate(LESSON_TASK, {
+            'unit': unit['title'], 'sources': selected, 'display_capabilities': DISPLAY_CAPABILITIES,
+            'feedback': [e for e in self.store.events(course['id']) if e['unit_id'] == unit['id']][:8]}, Lesson)
+        self.store.replace_lesson(course['id'], unit['id'], {**lesson, 'mode': 'ai', 'status': 'ready',
+            'metrics': metrics, 'generation_job': job_id}, payload['expected_revision'])
+        return {'unit_id': unit['id']}
 
     async def _tutor(self, job_id, payload):
         course = self.store.get("courses", payload["course_id"])

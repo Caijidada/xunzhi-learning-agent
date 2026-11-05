@@ -84,6 +84,13 @@ export function useWorkspace() {
       if(['completed','cancelled'].includes(done.status)) localStorage.removeItem('xunzhi.pending')
     } catch(e) { error.value = e instanceof Error ? e.message : '连接中断，重新打开后可以继续。' }
   }
+  async function regenerate() {
+    if(!course.value || !unit.value || busy.value) return
+    await guard(async()=>{
+      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:requestId(),expected_revision:lesson.value?.revision??0})})
+      await watchJob(j,{courseId:course.value!.id,unitId:unit.value!.id})
+    })
+  }
   async function curate() {
     if(!course.value || busy.value) return
     await guard(async()=>{
@@ -140,7 +147,7 @@ export function useWorkspace() {
     })
   }
   function selectText() { const text=window.getSelection()?.toString().trim(); if(text) selected.value=text.slice(0,3000) }
-  function practiceFor(blockIndex:number) { return course.value?.events.find(e=>e.unit_id===unit.value?.id && e.kind==='practice' && e.data.block_index===blockIndex)?.data }
+  function practiceFor(blockIndex:number) { return course.value?.events.find(e=>e.unit_id===unit.value?.id && e.kind==='practice' && e.data.block_index===blockIndex && (e.data.lesson_revision??0)===(lesson.value?.revision??0))?.data }
   onMounted(async()=>{
     await guard(async()=>{
       health.value=await api('/health'); await refreshCourses()
@@ -154,6 +161,6 @@ export function useWorkspace() {
     loading.value=false
   })
   onUnmounted(()=>{alive=false})
-  return {showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+  return {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

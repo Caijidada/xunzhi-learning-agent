@@ -226,3 +226,37 @@ def test_tutor_can_choose_nonvisual_method_and_retain_feedback(tmp_path):
         assert contexts[1]['history'][0]['response']['teaching']['approach']=='日常类比并说明局限'
         assert contexts[1]['current_explanation']
         assert c.get('/api/courses/course_demo/resume').json()['progress']['version']==0
+
+
+def test_regeneration_archives_content_and_rejects_stale_practice(tmp_path):
+    class Gateway:
+        calls=0
+        async def generate(self,*args):
+            self.calls+=1
+            return {'title':'新讲解','summary':'换个角度','blocks':[{'type':'text','body':'新内容','source_ids':['demo_source_1']}]}, {}
+    gateway=Gateway()
+    with TestClient(create_app(Settings(tmp_path,api_key='test-only'),gateway)) as c:
+        path='/api/courses/course_demo/units/demo_unit_1'
+        old=c.get(path).json()['lesson']
+        req={'request_id':'regenerate-test-01','expected_revision':0}
+        job=c.post(path+'/regenerate',json=req).json()
+        assert wait_job(c,job['id'])['status']=='completed'
+        assert c.get(path).json()['lesson']['revision']==1
+        assert c.get(path+'/versions').json()[0]==old
+        repeated=c.post(path+'/regenerate',json=req).json()
+        assert repeated['id']==job['id'] and gateway.calls==1
+        assert c.get('/api/courses/course_demo/resume').json()['progress']['unit_id']=='demo_unit_1'
+        stale=c.post('/api/courses/course_demo/learning-events',json={'request_id':'stale-practice-01','unit_id':'demo_unit_1','kind':'practice','block_index':0,'choice':0,'lesson_revision':0})
+        assert stale.status_code==409
+
+
+def test_regeneration_failure_preserves_original(tmp_path):
+    class Gateway:
+        async def generate(self,*args):
+            raise AppError('模型不可用','MODEL_UNAVAILABLE',503)
+    with TestClient(create_app(Settings(tmp_path,api_key='test-only'),Gateway())) as c:
+        path='/api/courses/course_demo/units/demo_unit_1'
+        old=c.get(path).json()['lesson']
+        job=c.post(path+'/regenerate',json={'request_id':'regenerate-fail-01','expected_revision':0}).json()
+        assert wait_job(c,job['id'])['status']=='failed'
+        assert c.get(path).json()['lesson']==old

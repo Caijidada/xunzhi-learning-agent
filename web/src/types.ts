@@ -1,9 +1,9 @@
 export type Step = { label: string; detail: string }
 export type Block = { type: 'text'|'callout'|'diagram'|'quiz'|'code'; title: string; body: string; source_ids: string[]; steps?: Step[]; options?: string[]; answer?: number; explanation?: string }
-export type Lesson = { title: string; summary: string; blocks: Block[]; mode: 'demo'|'extractive'|'ai'; status?: string }
+export type Lesson = { revision?: number; title: string; summary: string; blocks: Block[]; mode: 'demo'|'extractive'|'ai'; status?: string }
 export type Unit = { category?: 'learn'|'guide'|'skip'; reason?: string; id: string; title: string; chapter: number; chapter_title: string; source_ids: string[]; ready: boolean; minutes: number; page_start: number; page_end: number }
 export type Progress = { course_id: string; unit_id: string; block_index: number; version: number; updated: number }
-export type LearningEvent = { id: string; unit_id: string; kind: string; created: number; data: { text: string; correct?: boolean; choice?: number; block_index?: number; used_hint?: boolean; strategy?: string; target_id?: string } }
+export type LearningEvent = { id: string; unit_id: string; kind: string; created: number; data: { text: string; correct?: boolean; choice?: number; block_index?: number; lesson_revision?: number; used_hint?: boolean; strategy?: string; target_id?: string } }
 export type Course = { id: string; title: string; description: string; document_id: string; demo: boolean; units: Unit[]; progress: Progress; events: LearningEvent[]; document: { title: string; pages: number; missing_pages: number[]; warnings: string[] } }
 export type CourseItem = Pick<Course,'id'|'title'|'description'|'demo'|'document_id'|'progress'> & { units_count: number }
 export type Turn = { id: string; data: { message: string; selected_text: string; mode: string; response: { action: string; reason: string; blocks: Block[] } } }

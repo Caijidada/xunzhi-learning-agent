@@ -76,6 +76,11 @@ class ProgressRequest(BaseModel):
     block_index: int = Field(default=0, ge=0, le=100)
 
 
+class RegenerateRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=100)
+    expected_revision: int = Field(ge=0)
+
+
 class EventRequest(BaseModel):
     request_id: str = Field(min_length=8, max_length=100)
     unit_id: str
@@ -85,6 +90,7 @@ class EventRequest(BaseModel):
     block_index: int | None = Field(default=None, ge=0, le=100)
     choice: int | None = None
     used_hint: bool = False
+    lesson_revision: int = Field(default=0, ge=0)
 
 
 class AppError(Exception):

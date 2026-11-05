@@ -186,3 +186,27 @@ def test_model_auth_error_is_not_leaked(tmp_path):
         asyncio.run(gateway.generate('Teach',{'sources':[]},Lesson))
     assert 'secret-value' not in exc.value.message
     assert exc.value.code=='MODEL_AUTH'
+
+
+def test_tutor_can_choose_nonvisual_method_and_retain_feedback(tmp_path):
+    contexts=[]
+    def handle(request):
+        context=json.loads(json.loads(request.content)['messages'][1]['content'])['context']
+        contexts.append(context)
+        approach='日常类比并说明局限' if len(contexts)==1 else '正反例对照'
+        body={'action':'reexplain','reason':'针对当前问题选择说明方式',
+              'teaching':{'goal':'区分工具和工具处理的对象','approach':approach,'success_signal':'能解释一个新例子中的区别'},
+              'blocks':[{'type':'text','body':'先区分执行操作的工具与被操作的数据。','source_ids':[context['sources'][0]['id']]}]}
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps(body)}}]})
+    settings=Settings(tmp_path,api_key='test-only')
+    gateway=ModelGateway(settings,httpx.MockTransport(handle))
+    with TestClient(create_app(settings,gateway)) as c:
+        for request_id,message,intent in [('teaching-turn-01','也可以用图说明','diagram'),('teaching-turn-02','这个类比我还是不懂','confused')]:
+            job=c.post('/api/courses/course_demo/tutor-turns',json={'request_id':request_id,'unit_id':'demo_unit_1','message':message,'intent':intent}).json()
+            assert wait_job(c,job['id'])['status']=='completed'
+        turns=c.get('/api/courses/course_demo/units/demo_unit_1').json()['turns']
+        assert [t['data']['response']['teaching']['approach'] for t in turns]==['日常类比并说明局限','正反例对照']
+        assert all(t['data']['response']['blocks'][0]['type']=='text' for t in turns)
+        assert contexts[1]['history'][0]['response']['teaching']['approach']=='日常类比并说明局限'
+        assert contexts[1]['current_explanation']
+        assert c.get('/api/courses/course_demo/resume').json()['progress']['version']==0

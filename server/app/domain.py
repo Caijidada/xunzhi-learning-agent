@@ -34,10 +34,18 @@ class Lesson(BaseModel):
     blocks: list[Block] = Field(min_length=1, max_length=10)
 
 
+class TeachingChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    goal: str = Field(min_length=1, max_length=300, description="本轮要帮助用户理解的具体问题")
+    approach: str = Field(min_length=1, max_length=300, description="自由选择教学方式，不受 action 枚举限制")
+    success_signal: str = Field(max_length=300, description="什么可观察的表现能够支持理解，不能声称已掌握")
+
+
 class TutorResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal["answer", "clarify", "reexplain", "worked_example", "step_diagram", "micro_exercise"]
     reason: str = Field(max_length=300)
+    teaching: TeachingChoice
     blocks: list[Block] = Field(min_length=1, max_length=6)
 
 

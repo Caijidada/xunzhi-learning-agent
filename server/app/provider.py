@@ -5,6 +5,7 @@ import httpx
 from pydantic import ValidationError
 from .config import Settings
 from .domain import AppError
+from .pedagogy import TEACHING_POLICY
 
 
 SYSTEM = """你是耐心的中文学习导师。用户自己决定学习进度。
@@ -15,7 +16,7 @@ SYSTEM = """你是耐心的中文学习导师。用户自己决定学习进度�
 所有讲解和示例关联 source_ids；clarify 动作的澄清问题可以没有出处。
 文字简短清晰，每段一个意思。仅在解释过程有帮助时生成 diagram；steps 每步包含 label 和 detail。
 quiz 的 body 是题目，options 是选项，answer 是零起始正确下标，explanation 是解释。
-"""
+""" + TEACHING_POLICY
 
 
 class ModelGateway:

@@ -7,6 +7,7 @@ from .domain import AppError, Lesson, TutorResponse, TurnRequest
 from .materials import parse_pdf, build_units, retrieve
 from .provider import ModelGateway
 from .demo import demo_response
+from .pedagogy import LESSON_TASK, TUTOR_TASK, DISPLAY_CAPABILITIES
 
 
 class LearningService:
@@ -101,8 +102,8 @@ class LearningService:
             if self.settings.configured:
                 self.store.update_job(job_id, "running", "正在根据原文准备讲解")
                 lesson, metrics = await self.gateway.generate(
-                    "为当前小节写一个易消化的中文学习单元。4到6个内容块，先讲解和例子，适合时增加图解，最后可有一道自愿练习。不要把整章所有知识塞进一节。",
-                    {"unit": unit["title"], "sources": selected}, Lesson)
+                    LESSON_TASK,
+                    {"unit": unit["title"], "sources": selected, "display_capabilities": DISPLAY_CAPABILITIES}, Lesson)
                 mode = "ai"
             else:
                 lesson = {"title": unit["title"], "summary": "当前是原文导读。连接 DeepSeek 后，可以生成分段讲解、例子和互动演示。",
@@ -130,10 +131,17 @@ class LearningService:
         if self.settings.configured:
             history = self.store.turns(course["id"], unit["id"])[-4:]
             records = [e for e in self.store.events(course["id"]) if e["unit_id"] == unit["id"]][:8]
+            current_lesson = self.store.lesson(unit["id"])
+            current_blocks = (current_lesson or {}).get("blocks", [])
+            position = self.store.progress(course["id"])
+            start = position['block_index'] if position['unit_id'] == unit['id'] else 0
+            start = min(start, max(0, len(current_blocks) - 1))
             response, metrics = await self.gateway.generate(
-                "根据当前困惑选择最有帮助的教学动作并作答。参考 intent 但自行判断：解释、例子、分步图或澄清。最多3个内容块。用户说没懂时不要原样重复旧解释。",
+                TUTOR_TASK,
                 {"question": req.message, "intent": req.intent, "selected_text": req.selected_text, "unit": unit["title"],
-                 "sources": sources, "history": [t["data"] for t in history], "current_learning_records": records}, TutorResponse)
+                 "sources": sources, "history": [t["data"] for t in history], "current_learning_records": records,
+                 "current_explanation": current_blocks[max(0, start-1):start+2],
+                 "display_capabilities": DISPLAY_CAPABILITIES}, TutorResponse)
             mode = "ai"
         elif course.get("demo"):
             response, metrics, mode = demo_response(req.intent, req.message), {}, "demo"

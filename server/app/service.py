@@ -9,6 +9,7 @@ from .provider import ModelGateway
 from .demo import demo_response
 from .pedagogy import LESSON_TASK, TUTOR_TASK, DISPLAY_CAPABILITIES
 from .curriculum import route_units
+from .lessons import build_lesson
 from .domain import CurriculumReview
 
 
@@ -97,22 +98,9 @@ class LearningService:
         if previous and previous.get("pending_blocks"):
             draft = previous
         else:
-            chunks = self.store.chunks(course["document_id"])
-            selected = [c for c in chunks if c["id"] in set(unit["source_ids"])][:7]
-            if not selected:
-                raise AppError("本节没有可用原文", "SOURCE_UNAVAILABLE")
-            if self.settings.configured:
-                self.store.update_job(job_id, "running", "正在根据原文准备讲解")
-                lesson, metrics = await self.gateway.generate(
-                    LESSON_TASK,
-                    {"unit": unit["title"], "sources": selected, "display_capabilities": DISPLAY_CAPABILITIES}, Lesson)
-                mode = "ai"
-            else:
-                lesson = {"title": unit["title"], "summary": "当前是原文导读。连接 DeepSeek 后，可以生成分段讲解、例子和互动演示。",
-                          "blocks": [{"type": "text", "title": f"原文 · 文件第 {c['page']+1} 页", "body": c["text"], "source_ids": [c["id"]]} for c in selected[:5]]}
-                metrics, mode = {}, "extractive"
-            draft = {"title": lesson["title"], "summary": lesson["summary"], "blocks": [], "pending_blocks": lesson["blocks"], "status": "generating", "mode": mode, "metrics": metrics}
-            self.store.save_lesson(unit["id"], draft)
+            lesson = await build_lesson(self, job_id, course, unit, payload.get('depth','full'))
+            draft = {**lesson, 'blocks':[], 'pending_blocks':lesson['blocks'], 'status':'generating'}
+            self.store.save_lesson(unit['id'], draft)
         while draft["pending_blocks"]:
             await asyncio.sleep(0)
             draft["blocks"].append(draft["pending_blocks"].pop(0))
@@ -131,14 +119,8 @@ class LearningService:
             return {'unit_id': unit['id']}
         if not previous or previous.get('revision', 0) != payload['expected_revision']:
             raise AppError('讲解已变化，请刷新后重试', 'VERSION_CONFLICT', 409)
-        chunks = self.store.chunks(course['document_id'])
-        selected = [c for c in chunks if c['id'] in set(unit['source_ids'])][:7]
-        self.store.update_job(job_id, 'running', '正在重新组织讲解，原内容仍可阅读')
-        lesson, metrics = await self.gateway.generate(LESSON_TASK, {
-            'unit': unit['title'], 'sources': selected, 'display_capabilities': DISPLAY_CAPABILITIES,
-            'feedback': [e for e in self.store.events(course['id']) if e['unit_id'] == unit['id']][:8]}, Lesson)
-        self.store.replace_lesson(course['id'], unit['id'], {**lesson, 'mode': 'ai', 'status': 'ready',
-            'metrics': metrics, 'generation_job': job_id}, payload['expected_revision'])
+        lesson = await build_lesson(self, job_id, course, unit, payload.get('depth','full'))
+        self.store.replace_lesson(course['id'], unit['id'], {**lesson, 'generation_job': job_id}, payload['expected_revision'])
         return {'unit_id': unit['id']}
 
     async def _tutor(self, job_id, payload):

@@ -18,13 +18,16 @@ scene 用 900×500 画布表示对象与关系；节点宽160高80，坐标为�
 这些是模型编排的教学场景，不是真实代码执行或物理仿真。不能声称工具真的执行了、文件真的创建了。能力不适用时改用其他方式，不必使用场景。
 """
 
+# A diagram is retained for old content, but new visual explanations must be actual scenes.
+TEACHING_POLICY += "\n新输出不要生成 diagram 类型的顺序高亮卡片。如果适合视觉演示，使用 scene 表达关系、状态变化或情境差异；否则使用文字或代码。原文中的关键代码不能省略。代码请使用 code 块，code_trace 可注明每步 line_start、line_end、explanation、variables；必须与实际代码对应，不伪称运行结果。\n"
+
 LESSON_TASK = "为当前小节生成易消化的中文学习内容。根据知识难点选择结构与内容块数量，不强制类比、图解、例子或练习，不按固定教学模板凑内容。明确本次覆盖的范围。"
 
 TUTOR_TASK = "解决当前问题，依据教学策略自主选择方法。教学方法用 teaching.approach 自由描述；action 只是兼容界面的粗粒度分类，不限制教学方法。内容量以解决当前困难为准，避免无关扩展。"
 
 DISPLAY_CAPABILITIES = {
     "text": "解释、类比、正反例、Markdown 表格等",
-    "code": "仅显示代码，不能运行",
+    "code": "嵌入带行号代码，可用 code_trace 给出逐步行范围、解释和变量状态；这是推演，不是真实运行",
     "diagram": "步骤高亮，不支持连续场景动画或参数模拟",
     "scene": "可定义分组边界、对象位置、连线、状态帧和条件对照；支持平滑移动、信息流、暂停与拖动时间线，不执行真实代码",
     "quiz": "可自愿回答的单选题",

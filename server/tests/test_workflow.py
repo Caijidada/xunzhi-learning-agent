@@ -274,9 +274,39 @@ def test_scene_references_and_bounds_are_validated():
     assert block.scene.scenarios[0].frames[1].states[0].text=='结果出现'
     scene['edges'][0]['target']='missing'
     with pytest.raises(ValidationError): Block(type='scene',scene=scene)
+
     scene['edges'][0]['target']='b'
     scene['nodes'][0]['x']=1000
     with pytest.raises(ValidationError): Block(type='scene',scene=scene)
+
+
+def test_full_lesson_batches_resume_and_preserve_all_source_code(tmp_path):
+    class Gateway:
+        seen=[]
+        fail=True
+        async def generate(self,instruction,context,schema):
+            self.seen.append(context['sources'][0]['id'])
+            if len(self.seen)==2 and self.fail:
+                self.fail=False
+                raise AppError('retry','MODEL_UNAVAILABLE')
+            return {'title':'完整','summary':'讲解','blocks':[{'type':'text','body':'说明','source_ids':[context['sources'][0]['id']]}]},{}
+    g=Gateway();app=create_app(Settings(tmp_path,api_key='test'),g)
+    with TestClient(app) as c:
+        store=app.state.store
+        chunks=[{'id':f's{i}','title':'code','page':i,'text':f'def f{i}():\n    return {i}'} for i in range(11)]
+        store.add_chunks('document_demo',chunks)
+        with store.connection() as db:
+            u=store.unit('course_demo','demo_unit_1');u['source_ids']=[x['id'] for x in chunks]
+            db.execute('UPDATE units SET data=? WHERE id=?',(json.dumps(u),'demo_unit_1'))
+        url='/api/courses/course_demo/units/demo_unit_1'
+        job=c.post(url+'/regenerate',json={'request_id':'full-batches-001','expected_revision':0,'depth':'full'}).json()
+        assert wait_job(c,job['id'])['status']=='failed'
+        c.post('/api/jobs/'+job['id']+'/retry')
+        assert wait_job(c,job['id'])['status']=='completed'
+        lesson=c.get(url).json()['lesson']
+        assert lesson['coverage']=={'included':11,'total':11}
+        assert [b['body'] for b in lesson['blocks'] if b['type']=='source']==[x['text'] for x in chunks]
+        assert g.seen==['s0','s4','s4','s8']
 
 
 def test_curriculum_model_cannot_invent_unit_ids(tmp_path):

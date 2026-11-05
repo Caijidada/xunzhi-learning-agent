@@ -8,9 +8,16 @@ class Step(BaseModel):
     detail: str = Field(min_length=1, max_length=1200)
 
 
+class CodeStep(BaseModel):
+    line_start: int = Field(ge=1)
+    line_end: int = Field(ge=1)
+    explanation: str = Field(min_length=1, max_length=1500)
+    variables: str = Field(default='', max_length=1500)
+
+
 class Block(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["text", "callout", "diagram", "quiz", "code", "scene"]
+    type: Literal["text", "callout", "diagram", "quiz", "code", "scene", "source"]
     title: str = Field(default="", max_length=150)
     body: str = Field(default="", max_length=14000)
     source_ids: list[str] = Field(default_factory=list, max_length=12)
@@ -19,9 +26,12 @@ class Block(BaseModel):
     answer: int | None = None
     explanation: str = Field(default="", max_length=2000)
     scene: Scene | None = None
+    code_trace: list[CodeStep] = Field(default_factory=list, max_length=30)
 
     @model_validator(mode="after")
     def validate_shape(self):
+        if self.code_trace and (self.type!='code' or any(s.line_start>s.line_end or s.line_end>len(self.body.splitlines()) for s in self.code_trace)):
+            raise ValueError('代码推演必须引用实际存在的行')
         if self.type == 'scene' and self.scene is None:
             raise ValueError('场景需要提供具体对象、关系和变化')
         if self.type == "diagram" and len(self.steps) < 2:
@@ -77,12 +87,13 @@ class ProgressRequest(BaseModel):
     request_id: str = Field(min_length=8, max_length=100)
     unit_id: str
     expected_version: int = Field(ge=0)
-    block_index: int = Field(default=0, ge=0, le=100)
+    block_index: int = Field(default=0, ge=0, le=100000)
 
 
 class RegenerateRequest(BaseModel):
     request_id: str = Field(min_length=8, max_length=100)
     expected_revision: int = Field(ge=0)
+    depth: Literal['quick','full'] = 'full'
 
 
 class EventRequest(BaseModel):
@@ -91,7 +102,7 @@ class EventRequest(BaseModel):
     kind: Literal["understood", "confused", "practice", "skip", "correction", "note"]
     text: str = Field(default="", max_length=3000)
     target_id: str | None = None
-    block_index: int | None = Field(default=None, ge=0, le=100)
+    block_index: int | None = Field(default=None, ge=0, le=100000)
     choice: int | None = None
     used_hint: bool = False
     lesson_revision: int = Field(default=0, ge=0)

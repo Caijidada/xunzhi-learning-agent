@@ -10,6 +10,7 @@ export function useWorkspace() {
   const plan = ref<{tasks:{title:string;description:string;minutes:number}[]}>({tasks:[]})
   const busy = computed(() => !!job.value && ['queued','running'].includes(job.value.status))
   const index = computed(() => course.value?.units.findIndex(u=>u.id===unit.value?.id) ?? 0)
+  const depth = ref<'quick'|'full'>(localStorage.getItem('xunzhi.depth')==='quick'?'quick':'full')
   const showExtras = ref(false)
   const learningUnits = computed(() => course.value?.units.filter(u=>u.category==='learn'||!u.category) ?? [])
   const chapters = computed(() => {
@@ -87,7 +88,7 @@ export function useWorkspace() {
   async function regenerate() {
     if(!course.value || !unit.value || busy.value) return
     await guard(async()=>{
-      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:requestId(),expected_revision:lesson.value?.revision??0})})
+      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:requestId(),expected_revision:lesson.value?.revision??0,depth:depth.value})})
       await watchJob(j,{courseId:course.value!.id,unitId:unit.value!.id})
     })
   }
@@ -101,7 +102,7 @@ export function useWorkspace() {
   async function prepare() {
     if(!course.value || !unit.value || busy.value) return
     await guard(async()=>{
-      const j = await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/prepare`,{method:'POST'})
+      const j = await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/prepare?depth=${depth.value}`,{method:'POST'})
       await watchJob(j,{courseId:course.value!.id,unitId:unit.value!.id})
     })
   }
@@ -161,6 +162,6 @@ export function useWorkspace() {
     loading.value=false
   })
   onUnmounted(()=>{alive=false})
-  return {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+  return {depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

@@ -30,6 +30,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, position INTEGER NOT NULL, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS lessons(unit_id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS lesson_versions(unit_id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(unit_id,revision));
+            CREATE TABLE IF NOT EXISTS generation_drafts(id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS progress(course_id TEXT PRIMARY KEY, unit_id TEXT NOT NULL, block_index INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL, request_id TEXT UNIQUE NOT NULL, superseded INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
@@ -115,6 +116,15 @@ class Store:
         if not r:
             raise AppError("课程不存在", "NOT_FOUND", 404)
         return dict(r)
+
+    def generation(self, job_id):
+        with self.connection() as db:
+            r=db.execute('SELECT data FROM generation_drafts WHERE id=?',(job_id,)).fetchone()
+        return json.loads(r[0]) if r else None
+
+    def save_generation(self, job_id, data):
+        with self.connection() as db:
+            db.execute('INSERT OR REPLACE INTO generation_drafts VALUES(?,?)',(job_id,encode(data)))
 
     def replace_lesson(self, course_id, unit_id, lesson, expected_revision):
         with self.connection() as db:

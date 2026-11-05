@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 import hashlib
 import time
 from fastapi import FastAPI, UploadFile, File, Query
@@ -55,10 +56,10 @@ def create_app(settings=None, gateway=None):
         return {"unit": unit, "lesson": data, "turns": store.turns(course_id, unit_id)}
 
     @app.post("/api/courses/{course_id}/units/{unit_id}/prepare", status_code=202)
-    async def prepare(course_id: str, unit_id: str):
+    async def prepare(course_id: str, unit_id: str, depth: Literal['quick','full'] = 'full'):
         store.unit(course_id, unit_id)
         mode = settings.model if settings.configured else "extractive"
-        return service.submit(f"prepare:{course_id}:{unit_id}:{mode}", "prepare", {"course_id": course_id, "unit_id": unit_id})
+        return service.submit(f"prepare:{course_id}:{unit_id}:{mode}:{depth}", "prepare", {"course_id": course_id, "unit_id": unit_id, "depth": depth})
 
     @app.post("/api/courses/{course_id}/tutor-turns", status_code=202)
     async def tutor(course_id: str, req: TurnRequest):
@@ -71,7 +72,7 @@ def create_app(settings=None, gateway=None):
         if not settings.configured:
             raise AppError('请先配置模型', 'MODEL_NOT_CONFIGURED', 503)
         return service.submit(f'regenerate:{course_id}:{unit_id}:{req.request_id}', 'regenerate',
-                              {'course_id': course_id, 'unit_id': unit_id, 'expected_revision': req.expected_revision})
+                              {'course_id': course_id, 'unit_id': unit_id, 'expected_revision': req.expected_revision, 'depth': req.depth})
 
     @app.get('/api/courses/{course_id}/units/{unit_id}/versions')
     def versions(course_id: str, unit_id: str):

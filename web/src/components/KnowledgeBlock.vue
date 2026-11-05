@@ -5,9 +5,10 @@ import DOMPurify from 'dompurify'
 import { BookOpen, Check, Lightbulb, ArrowRight } from '@lucide/vue'
 import StepDiagram from './StepDiagram.vue'
 import ScenePlayer from './ScenePlayer.vue'
+import CodeReader from './CodeReader.vue'
 import type { Block } from '../types'
 const props=defineProps<{block:Block;compact?:boolean;practice?:{choice?:number;correct?:boolean;used_hint?:boolean};recordable?:boolean}>()
-const emit=defineEmits<{scene:[block:Block];source:[id:string];practice:[choice:number,usedHint:boolean]}>()
+const emit=defineEmits<{askCode:[text:string];scene:[block:Block];source:[id:string];practice:[choice:number,usedHint:boolean]}>()
 const selected=ref<number|null>(props.practice?.choice??null),submitted=ref(!!props.practice),hint=ref(!!props.practice?.used_hint)
 const html=computed(()=>DOMPurify.sanitize(marked.parse(props.block.body||'',{async:false}) as string,{FORBID_TAGS:['img','iframe','style','script'],FORBID_ATTR:['style']}))
 const correct=computed(()=>selected.value===props.block.answer)
@@ -19,7 +20,8 @@ function submit(){if(selected.value===null)return;submitted.value=true;emit('pra
     <div class="block-inner">
       <div v-if="block.type==='quiz'" class="eyebrow quiz-eyebrow">随手练一练 <span>{{recordable?'可跳过，不影响继续学习':'体验练习'}}</span></div>
       <h3 v-if="block.title">{{block.title}}</h3>
-      <pre v-if="block.type==='code'" class="code-block"><code>{{block.body}}</code></pre>
+      <CodeReader v-if="block.type==='code'" :block="block" @ask="emit('askCode',$event)"/>
+      <details v-else-if="block.type==='source'" class="original-text"><summary>展开完整原文（包括提取到的代码）</summary><pre>{{block.body}}</pre></details>
       <div v-else class="prose" v-html="html"></div>
       <template v-if="block.type==='scene' && block.scene"><button v-if="compact" class="button primary small" @click="emit('scene',block)">打开演示区 <ArrowRight :size="14"/></button><ScenePlayer v-else :scene="block.scene"/></template>
       <StepDiagram v-if="block.type==='diagram' && block.steps?.length" :steps="block.steps"/>

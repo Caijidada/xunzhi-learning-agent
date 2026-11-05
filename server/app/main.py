@@ -9,6 +9,7 @@ from .config import Settings, ROOT
 from .store import Store, uid
 from .service import LearningService
 from .demo import seed_demo
+from .curriculum import route_units
 from .domain import AppError, TurnRequest, ProgressRequest, EventRequest, RegenerateRequest
 
 
@@ -33,7 +34,7 @@ def create_app(settings=None, gateway=None):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "model_configured": settings.configured, "model": settings.model,
+        return {"ok": True, "api_revision": "learning-scenes-v1", "model_configured": settings.configured, "model": settings.model,
                 "provider": "DeepSeek" if "deepseek" in settings.base_url else "兼容接口"}
 
     @app.get("/api/courses")
@@ -47,6 +48,7 @@ def create_app(settings=None, gateway=None):
     @app.get("/api/courses/{course_id}/units/{unit_id}")
     def lesson(course_id: str, unit_id: str):
         unit = store.unit(course_id, unit_id)
+        unit = route_units(store.get('courses', course_id), [unit])[0]
         data = store.lesson(unit_id)
         if data:
             data = {k: v for k, v in data.items() if k != "pending_blocks"}

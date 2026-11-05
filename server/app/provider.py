@@ -60,7 +60,7 @@ class ModelGateway:
                             raise ValueError("引用 ID 不在提供的材料中")
                         if not block.source_ids and getattr(value, "action", "") != "clarify":
                             raise ValueError("教学内容需要来源 ID")
-                    if getattr(value, "action", "") == "step_diagram" and not any(b.type == "diagram" for b in value.blocks):
+                    if getattr(value, "action", "") == "step_diagram" and not any(b.type in {"diagram", "scene"} for b in value.blocks):
                         raise ValueError("step_diagram 动作需要实际图解")
                     if hasattr(value, 'choices'):
                         expected = {u['unit_id'] for u in context['units']}

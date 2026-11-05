@@ -4,9 +4,10 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { BookOpen, Check, Lightbulb, ArrowRight } from '@lucide/vue'
 import StepDiagram from './StepDiagram.vue'
+import ScenePlayer from './ScenePlayer.vue'
 import type { Block } from '../types'
 const props=defineProps<{block:Block;compact?:boolean;practice?:{choice?:number;correct?:boolean;used_hint?:boolean};recordable?:boolean}>()
-const emit=defineEmits<{source:[id:string];practice:[choice:number,usedHint:boolean]}>()
+const emit=defineEmits<{scene:[block:Block];source:[id:string];practice:[choice:number,usedHint:boolean]}>()
 const selected=ref<number|null>(props.practice?.choice??null),submitted=ref(!!props.practice),hint=ref(!!props.practice?.used_hint)
 const html=computed(()=>DOMPurify.sanitize(marked.parse(props.block.body||'',{async:false}) as string,{FORBID_TAGS:['img','iframe','style','script'],FORBID_ATTR:['style']}))
 const correct=computed(()=>selected.value===props.block.answer)
@@ -20,6 +21,7 @@ function submit(){if(selected.value===null)return;submitted.value=true;emit('pra
       <h3 v-if="block.title">{{block.title}}</h3>
       <pre v-if="block.type==='code'" class="code-block"><code>{{block.body}}</code></pre>
       <div v-else class="prose" v-html="html"></div>
+      <template v-if="block.type==='scene' && block.scene"><button v-if="compact" class="button primary small" @click="emit('scene',block)">打开演示区 <ArrowRight :size="14"/></button><ScenePlayer v-else :scene="block.scene"/></template>
       <StepDiagram v-if="block.type==='diagram' && block.steps?.length" :steps="block.steps"/>
       <template v-if="block.type==='quiz'">
         <div class="quiz-options"><button v-for="(option,i) in block.options" :key="i" :disabled="submitted" :class="{chosen:selected===i,correct:submitted&&i===block.answer,incorrect:submitted&&selected===i&&!correct}" @click="selected=i"><span>{{String.fromCharCode(65+i)}}</span>{{option}}<Check v-if="submitted&&i===block.answer" :size="16"/></button></div>

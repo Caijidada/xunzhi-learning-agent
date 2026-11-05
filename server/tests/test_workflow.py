@@ -124,6 +124,7 @@ def test_curriculum_routes_existing_content_without_losing_progress(client):
         db.execute('UPDATE units SET data=? WHERE id=?',(json.dumps(unit),'demo_unit_1'))
     course=client.get('/api/courses/course_demo').json()
     assert course['units'][0]['category']=='skip'
+    assert client.get('/api/courses/course_demo/units/demo_unit_1').json()['unit']['category']=='skip'
     assert course['progress']['unit_id']=='demo_unit_1'
     assert client.get('/api/courses/course_demo/units/demo_unit_1').json()['lesson']
     course_data=store.get('courses','course_demo')
@@ -260,3 +261,29 @@ def test_regeneration_failure_preserves_original(tmp_path):
         job=c.post(path+'/regenerate',json={'request_id':'regenerate-fail-01','expected_revision':0}).json()
         assert wait_job(c,job['id'])['status']=='failed'
         assert c.get(path).json()['lesson']==old
+
+
+def test_scene_references_and_bounds_are_validated():
+    from server.app.domain import Block
+    from pydantic import ValidationError
+    scene={'goal':'观察输入如何改变输出','nodes':[{'id':'a','label':'输入','x':40,'y':100},{'id':'b','label':'输出','x':500,'y':100}],
+           'edges':[{'id':'e','source':'a','target':'b'}], 'scenarios':[{'label':'输入改变','frames':[
+               {'caption':'输入尚未提交','states':[{'node_id':'b','text':'等待'}]},
+               {'caption':'输入传递后得到结果','active_edges':['e'],'states':[{'node_id':'b','text':'结果出现'}]}]}]}
+    block=Block(type='scene',body='示意',source_ids=['source'],scene=scene)
+    assert block.scene.scenarios[0].frames[1].states[0].text=='结果出现'
+    scene['edges'][0]['target']='missing'
+    with pytest.raises(ValidationError): Block(type='scene',scene=scene)
+    scene['edges'][0]['target']='b'
+    scene['nodes'][0]['x']=1000
+    with pytest.raises(ValidationError): Block(type='scene',scene=scene)
+
+
+def test_curriculum_model_cannot_invent_unit_ids(tmp_path):
+    from server.app.domain import CurriculumReview
+    def handle(request):
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps({'choices':[{'unit_id':'invented','category':'skip','reason':'wrong'}]})}}]})
+    gateway=ModelGateway(Settings(tmp_path,api_key='test-only'),httpx.MockTransport(handle))
+    with pytest.raises(AppError) as error:
+        asyncio.run(gateway.generate('审阅',{'units':[{'unit_id':'real','title':'正文'}]},CurriculumReview))
+    assert error.value.code=='OUTPUT_INVALID'

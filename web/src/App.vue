@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Upload, X, Sparkles, Clock3, Bookmark, Check, MessageCircle, Send, FileText, Settings2, CircleHelp, Layers3, Leaf, Library, History, RotateCcw, LoaderCircle, PanelLeftClose, Menu, Quote, Lightbulb, SlidersHorizontal } from '@lucide/vue'
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
 import { useWorkspace } from './useWorkspace'
-import type { LearningEvent } from './types'
+import type { Block, LearningEvent } from './types'
 const {regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
 const showUpload=ref(false),showSettings=ref(false),sidebar=ref(false),dragging=ref(false),fileInput=ref<HTMLInputElement|null>(null)
+const activeScene=ref<Block|null>(null)
+watch(()=>unit.value?.id,()=>{activeScene.value=null})
+function explainBlock(b:Block,visual=false){selected.value=[b.title,b.body,...(b.steps??[]).map(s=>s.label+': '+s.detail)].join('\n').slice(0,3000);send(visual?'diagram':'confused',visual?'请解释选中的内容；如果动态场景有助于理解，请在演示区展示关键关系或状态变化，否则用更合适的方法。':'这段我没有理解，请判断难点并换一种更清楚的讲法。')}
 const editEvent=ref<LearningEvent|null>(null),editText=ref('')
 const activeEvents=computed(()=>course.value?.events??[])
 const understanding=computed(()=>activeEvents.value.some(e=>e.unit_id===unit.value?.id&&e.kind==='understood'))
@@ -29,6 +32,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
       <div class="top-actions"><button class="button subtle small" @click="showUpload=true" :disabled="busy"><Plus :size="16"/> 导入资料</button><button class="icon-btn settings-button" @click="showSettings=true" aria-label="模型设置"><Settings2 :size="19"/></button><span class="avatar">我</span></div>
     </header>
 
+    <div v-if="!loading && health.api_revision!=='learning-scenes-v1'" class="error-banner" role="alert">页面已更新，但后台服务仍是旧版本。请停止原项目进程，再运行 .venv/bin/python scripts/dev.py，然后刷新页面。</div>
     <div v-if="error" class="error-banner" role="alert"><CircleHelp :size="17"/><span>{{error}}</span><button class="icon-btn" @click="error=''" aria-label="关闭提示"><X :size="16"/></button></div>
     <div v-if="job && job.status!=='completed'" class="job-banner" :class="{'job-error':['failed','interrupted'].includes(job.status)}"><LoaderCircle v-if="busy" :size="15" class="spin"/><span>{{job.message||'正在准备…'}}</span><button v-if="busy" class="text-btn" @click="cancel">停止</button><button v-else-if="['failed','interrupted','cancelled'].includes(job.status)" class="text-btn" @click="retry"><RotateCcw :size="13"/>继续尝试</button></div>
 
@@ -51,12 +55,14 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <h1>{{unit.title}}</h1>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
+          <section v-if="activeScene" class="active-demonstration"><div class="demo-heading"><strong>围绕你的问题，换个角度看</strong><button class="text-btn" @click="activeScene=null">收起演示</button></div><KnowledgeBlock :block="activeScene" @source="openSource"/></section>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
           <template v-if="lesson">
             <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
             <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
               <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint,lesson_revision:lesson?.revision??0})"/>
+              <div class="block-help"><button class="text-btn" :disabled="busy" @click.stop="explainBlock(b)">帮我理解这段</button><button class="text-btn" :disabled="busy" @click.stop="explainBlock(b,true)">在演示区讲解</button></div>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>
             <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
@@ -70,8 +76,8 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <section class="chat-card">
             <div class="chat-heading"><span class="assistant-avatar"><Sparkles :size="19"/></span><div><h2>你的学习伙伴</h2><p>不明白的地方，我们一起拆开看。</p></div><span class="chat-status" :class="{online:health.model_configured}" :title="health.model_configured?'已配置模型':'示例 / 原文模式'"></span></div>
             <div class="chat-messages" aria-live="polite">
-              <div v-if="!turns.length" class="chat-welcome"><span class="welcome-symbol"><MessageCircle :size="25" :stroke-width="1.4"/></span><h3>卡住，也是一种开始。</h3><p>选中左边的一段内容，或直接告诉我<br/>哪里还没明白。</p><div class="suggestion-stack"><button @click="send('confused','这里我还是不太明白，可以换一种方式讲讲吗？')" :disabled="busy"><CircleHelp :size="15"/>这里我还没懂<ArrowUpRight :size="14"/></button><button @click="send('example','能给我一个贴近日常生活的例子吗？')" :disabled="busy"><Lightbulb :size="15"/>给我一个具体的例子<ArrowUpRight :size="14"/></button><button @click="send('diagram','可以用步骤图演示这个过程吗？')" :disabled="busy"><Layers3 :size="15"/>让这个过程动起来<ArrowUpRight :size="14"/></button></div></div>
-              <template v-for="turn in turns" :key="turn.id"><div class="user-message"><small v-if="turn.data.selected_text"><Quote :size="12"/>{{turn.data.selected_text.slice(0,90)}}</small><p>{{turn.data.message}}</p></div><div class="assistant-message"><div class="response-label"><Sparkles :size="13"/>{{actionLabels[turn.data.response.action]||'一起理解'}}<span v-if="turn.data.mode==='demo'">预设示例</span><span v-if="turn.data.mode==='extractive'">原文检索</span></div><KnowledgeBlock v-for="(b,i) in turn.data.response.blocks" :key="i" :block="b" :compact="true" @source="openSource"/></div></template>
+              <div v-if="!turns.length" class="chat-welcome"><span class="welcome-symbol"><MessageCircle :size="25" :stroke-width="1.4"/></span><h3>卡住，也是一种开始。</h3><p>选中左边的一段内容，或直接告诉我<br/>哪里还没明白。</p><div class="suggestion-stack"><button @click="send('confused','这里我还是不太明白，可以换一种方式讲讲吗？')" :disabled="busy"><CircleHelp :size="15"/>这里我还没懂<ArrowUpRight :size="14"/></button><button @click="send('example','能给我一个贴近日常生活的例子吗？')" :disabled="busy"><Lightbulb :size="15"/>给我一个具体的例子<ArrowUpRight :size="14"/></button><button @click="send('diagram','请帮我理解这段内容。若关系或变化适合演示，请放到演示区；否则选择更清楚的讲法。')" :disabled="busy"><Layers3 :size="15"/>让这个过程动起来<ArrowUpRight :size="14"/></button></div></div>
+              <template v-for="turn in turns" :key="turn.id"><div class="user-message"><small v-if="turn.data.selected_text"><Quote :size="12"/>{{turn.data.selected_text.slice(0,90)}}</small><p>{{turn.data.message}}</p></div><div class="assistant-message"><div class="response-label"><Sparkles :size="13"/>{{actionLabels[turn.data.response.action]||'一起理解'}}<span v-if="turn.data.mode==='demo'">预设示例</span><span v-if="turn.data.mode==='extractive'">原文检索</span></div><KnowledgeBlock v-for="(b,i) in turn.data.response.blocks" :key="i" :block="b" :compact="true" @source="openSource" @scene="activeScene=$event"/></div></template>
               <div v-if="busy&&job?.kind==='tutor'" class="thinking"><span></span><span></span><span></span>正在结合原文整理…</div>
             </div>
             <div class="chat-composer"><div v-if="selected" class="selection-chip"><Quote :size="13"/><span>{{selected.slice(0,55)}}{{selected.length>55?'…':''}}</span><button @click="selected=''" aria-label="清除选中文字"><X :size="12"/></button></div><form @submit.prevent="send()"><textarea v-model="message" placeholder="这个地方，我想再问问…" aria-label="向学习伙伴提问" rows="2" @keydown.enter.exact.prevent="send()"></textarea><div class="composer-bottom"><span>跟着你的问题，换一种讲法</span><button :disabled="busy||!message.trim()" type="submit" aria-label="发送问题"><Send :size="16"/></button></div></form><p v-if="!health.model_configured" class="connection-note"><span></span>{{course.demo?'示例体验：回答为预设内容':'未连接模型：当前仅检索原文'}}<button @click="showSettings=true">连接 DeepSeek</button></p><p v-else class="connection-note"><span class="connected"></span>已连接 {{health.provider}} · 重要内容请核对出处</p></div>

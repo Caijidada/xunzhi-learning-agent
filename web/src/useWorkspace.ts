@@ -4,7 +4,7 @@ import type { Course, CourseItem, Unit, Lesson, Turn, Job, Source, Progress, Lea
 
 export function useWorkspace() {
   const courses = ref<CourseItem[]>([]), course = ref<Course|null>(null), unit = ref<Unit|null>(null)
-  const lesson = ref<Lesson|null>(null), turns = ref<Turn[]>([]), health = ref({model_configured:false,model:'',provider:'DeepSeek'})
+  const lesson = ref<Lesson|null>(null), turns = ref<Turn[]>([]), health = ref({api_revision:'',model_configured:false,model:'',provider:'DeepSeek'})
   const error = ref(''), loading = ref(true), view = ref('learn'), source = ref<Source|null>(null), selected = ref('')
   const message = ref(''), job = ref<Job|null>(null), minutes = ref(Number(localStorage.getItem('xunzhi.minutes')) || 15)
   const plan = ref<{tasks:{title:string;description:string;minutes:number}[]}>({tasks:[]})

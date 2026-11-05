@@ -1,5 +1,6 @@
 from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+from .scenes import Scene
 
 
 class Step(BaseModel):
@@ -9,7 +10,7 @@ class Step(BaseModel):
 
 class Block(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["text", "callout", "diagram", "quiz", "code"]
+    type: Literal["text", "callout", "diagram", "quiz", "code", "scene"]
     title: str = Field(default="", max_length=150)
     body: str = Field(default="", max_length=14000)
     source_ids: list[str] = Field(default_factory=list, max_length=12)
@@ -17,9 +18,12 @@ class Block(BaseModel):
     options: list[str] = Field(default_factory=list, max_length=6)
     answer: int | None = None
     explanation: str = Field(default="", max_length=2000)
+    scene: Scene | None = None
 
     @model_validator(mode="after")
     def validate_shape(self):
+        if self.type == 'scene' and self.scene is None:
+            raise ValueError('场景需要提供具体对象、关系和变化')
         if self.type == "diagram" and len(self.steps) < 2:
             raise ValueError("图解至少需要两个步骤")
         if self.type == "quiz" and (len(self.options) < 2 or self.answer is None or not 0 <= self.answer < len(self.options)):

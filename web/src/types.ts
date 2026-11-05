@@ -1,5 +1,11 @@
+export type Scene = {
+  goal:string; nodes:{id:string;label:string;x:number;y:number}[];
+  groups:{label:string;x:number;y:number;width:number;height:number}[];
+  edges:{id:string;source:string;target:string;label:string}[];
+  scenarios:{label:string;frames:{caption:string;active_nodes:string[];active_edges:string[];states:{node_id:string;text:string;x?:number|null;y?:number|null}[]}[]}[]
+}
 export type Step = { label: string; detail: string }
-export type Block = { type: 'text'|'callout'|'diagram'|'quiz'|'code'; title: string; body: string; source_ids: string[]; steps?: Step[]; options?: string[]; answer?: number; explanation?: string }
+export type Block = { scene?:Scene; type: 'text'|'callout'|'diagram'|'quiz'|'code'|'scene'; title: string; body: string; source_ids: string[]; steps?: Step[]; options?: string[]; answer?: number; explanation?: string }
 export type Lesson = { revision?: number; title: string; summary: string; blocks: Block[]; mode: 'demo'|'extractive'|'ai'; status?: string }
 export type Unit = { category?: 'learn'|'guide'|'skip'; reason?: string; id: string; title: string; chapter: number; chapter_title: string; source_ids: string[]; ready: boolean; minutes: number; page_start: number; page_end: number }
 export type Progress = { course_id: string; unit_id: string; block_index: number; version: number; updated: number }

@@ -47,7 +47,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
   <div class="app-shell">
     <header class="topbar">
       <button class="brand" @click="view='learn'"><span class="brand-symbol"><Layers3 :size="23" :stroke-width="1.7"/></span><span>循知<small>让理解发生</small></span></button>
-      <nav class="main-nav" aria-label="主导航"><button :class="{active:view==='learn'}" @click="view='learn'"><BookOpen :size="16"/>学习空间</button><button :class="{active:view==='library'}" @click="view='library'"><Library :size="16"/>我的资料</button><button :class="{active:view==='memory'}" @click="view='memory'"><History :size="16"/>学习记录</button></nav>
+      <nav class="main-nav" :style="{'--tab': ['learn','library','memory'].indexOf(view)}" aria-label="主导航"><button :class="{active:view==='learn'}" @click="view='learn'"><BookOpen :size="16"/>学习空间</button><button :class="{active:view==='library'}" @click="view='library'"><Library :size="16"/>我的资料</button><button :class="{active:view==='memory'}" @click="view='memory'"><History :size="16"/>学习记录</button></nav>
       <div class="top-actions"><button class="button subtle small" @click="showUpload=true" :disabled="busy"><Plus :size="16"/> 导入资料</button><button class="icon-btn settings-button" @click="showSettings=true" aria-label="模型设置"><Settings2 :size="19"/></button><span class="avatar">我</span></div>
     </header>
 
@@ -74,19 +74,20 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <h1>{{unit.title}}</h1>
           <div class="learning-mode">
             <span id="depth-label">学习方式</span>
-            <div class="depth-switch" role="radiogroup" aria-labelledby="depth-label">
+            <div class="depth-switch" :class="{quick:depth==='quick'}" role="radiogroup" aria-labelledby="depth-label">
               <label v-for="option in [{value:'full',label:'完整学习'},{value:'quick',label:'快速学习'}]" :key="option.value">
                 <input type="radio" name="lesson-depth" :value="option.value" v-model="depth" @change="saveDepth">
                 <span>{{option.label}}</span>
               </label>
             </div>
             <small v-if="lesson?.depth && lesson.depth!==depth">更新本节后生效</small>
+            <button v-if="lesson && health.model_configured" class="text-btn update-lesson" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>更新本节</button>
           </div>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
           <template v-if="lesson">
-            <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
+
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
             <article v-for="{block:b,index:i} in teachingBlocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
               <span v-if="rewardNotice?.unitId===unit.id && rewardNotice.blockIndex===i" class="earned-xp" role="status">经验 +{{ rewardNotice.points }}</span>

@@ -25,3 +25,18 @@
 .depth-switch label span { display: block; padding: .35rem .85rem; border-radius: 18px; color: #49634f; }
 .depth-switch input:checked + span { background: #375e4c; color: white; }
 .depth-switch input:focus-visible + span { outline: 2px solid #304d3d; outline-offset: 2px; }
+:root { --slide: 280ms cubic-bezier(.18,.8,.23,1); }
+.main-nav { display: grid; grid-template-columns: repeat(3, 1fr); position: relative; column-gap: var(--nav-gap, 24px); }
+.main-nav button { justify-content: center; white-space: nowrap; }
+.main-nav button.active:after { display: none; }
+.main-nav::after { content: ''; position: absolute; pointer-events: none; bottom: 0; left: 0; height: 3px; border-radius: 3px; background: var(--green); width: calc((100% - 2 * var(--nav-gap, 24px)) / 3); transform: translateX(calc(var(--tab) * (100% + var(--nav-gap, 24px)))); transition: transform var(--slide); }
+.depth-switch { display: inline-grid; grid-template-columns: repeat(2,1fr); position: relative; isolation: isolate; }
+.depth-switch::before { content: ''; position: absolute; inset: 3px auto 3px 3px; width: calc(50% - 3px); background: #375e4c; border-radius: inherit; transition: transform var(--slide); }
+.depth-switch.quick::before { transform: translateX(100%); }
+.depth-switch input:checked + span { background: transparent; }
+.depth-switch label span, .main-nav button, .unit-link, .quiz-options button { transition: color 160ms, background-color 160ms, border-color 160ms; }
+.update-lesson { margin-inline-start: auto; }
+@media(max-width:740px) { .main-nav { --nav-gap: 12px; } }
+@media(prefers-reduced-motion:reduce) {
+  .main-nav::after, .depth-switch::before, .depth-switch label span, .main-nav button, .unit-link, .quiz-options button { transition: none; }
+}

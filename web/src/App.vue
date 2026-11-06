@@ -72,8 +72,16 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
         <main class="lesson-content" v-if="unit" @mouseup="selectText">
           <div class="lesson-kicker"><span class="pill">{{modeLabel}}</span><span><Clock3 :size="13"/>约 {{unit.minutes}} 分钟</span><span>{{index+1}} / {{course.units.length}} 节</span></div>
           <h1>{{unit.title}}</h1>
-          <div class="learning-mode"><label>学习方式 <select v-model="depth" @change="saveDepth"><option value="full">完整学习</option><option value="quick">快速学习</option></select></label><span>{{depth==='full'?'逐批讲解全部已提取原文，保留代码与原文对照；耗时较长。':'先学重点，可能省略细节。'}}更改后点击更新本节。</span></div>
-          <p v-if="lesson?.coverage" class="coverage-note">{{lesson.depth==='full'?'完整学习':'快速学习'}} · 已纳入 {{lesson.coverage.included}} / {{lesson.coverage.total}} 个原文片段（不代表全部知识已掌握）</p>
+          <div class="learning-mode">
+            <span id="depth-label">学习方式</span>
+            <div class="depth-switch" role="radiogroup" aria-labelledby="depth-label">
+              <label v-for="option in [{value:'full',label:'完整学习'},{value:'quick',label:'快速学习'}]" :key="option.value">
+                <input type="radio" name="lesson-depth" :value="option.value" v-model="depth" @change="saveDepth">
+                <span>{{option.label}}</span>
+              </label>
+            </div>
+            <small v-if="lesson?.depth && lesson.depth!==depth">更新本节后生效</small>
+          </div>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>

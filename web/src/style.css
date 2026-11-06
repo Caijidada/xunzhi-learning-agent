@@ -19,3 +19,9 @@
 .source-page { border-top: 1px solid #dce4d7; margin-top: .7rem; padding-top: .7rem; }
 .source-page pre { white-space: pre-wrap; overflow-wrap: anywhere; font: .88rem/1.8 ui-monospace, monospace; }
 .source-page button { margin-inline-end: 1rem; }
+.depth-switch { display: inline-flex; padding: 3px; background: #edf2e9; border-radius: 20px; }
+.depth-switch label { position: relative; cursor: pointer; }
+.depth-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.depth-switch label span { display: block; padding: .35rem .85rem; border-radius: 18px; color: #49634f; }
+.depth-switch input:checked + span { background: #375e4c; color: white; }
+.depth-switch input:focus-visible + span { outline: 2px solid #304d3d; outline-offset: 2px; }

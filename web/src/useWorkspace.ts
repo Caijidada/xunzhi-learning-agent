@@ -40,7 +40,13 @@ export function useWorkspace() {
     if(restore) {
       await nextTick()
       const saved = course.value.progress.block_index
-      if(saved > 0) document.getElementById(`block-${saved}`)?.scrollIntoView({block:'center'})
+      const target = document.getElementById(`block-${saved}`)
+      if (target && saved > 0) {
+        for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+          if (parent instanceof HTMLDetailsElement) parent.open = true
+        }
+        target.scrollIntoView({block:'center'})
+      }
     }
   }
   async function openCourse(id:string) {

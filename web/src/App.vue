@@ -19,6 +19,19 @@ const activeEvents=computed(()=>course.value?.events??[])
 const understanding=computed(()=>activeEvents.value.some(e=>e.unit_id===unit.value?.id&&e.kind==='understood'))
 const nextLearningUnit=computed(()=>course.value?.units.slice(index.value+1).find(u=>u.category==='learn'||!u.category))
 const modeLabel=computed(()=>lesson.value?.mode==='ai'?'AI 讲解':lesson.value?.mode==='demo'?'内置体验材料':'原文导读')
+const indexedBlocks = computed(() => (lesson.value?.blocks ?? []).map((block, index) => ({block, index})))
+const teachingBlocks = computed(() => indexedBlocks.value.filter(({block}) => block.type !== 'source'))
+const originalPages = computed(() => {
+  const pages = new Map<string, typeof indexedBlocks.value>()
+  for (const entry of indexedBlocks.value) {
+    if (entry.block.type !== 'source') continue
+    const title = entry.block.title.replace(/^原文对照 · 文件/, '') || '本节原文'
+    const page = pages.get(title) ?? []
+    page.push(entry)
+    pages.set(title, page)
+  }
+  return Array.from(pages, ([title, entries]) => ({title, entries}))
+})
 const actionLabels:Record<string,string>={answer:'围绕你的问题',clarify:'先弄清卡在哪里',reexplain:'换一种讲法',worked_example:'用一个例子理解',step_diagram:'我们分步看',micro_exercise:'试着用一下'}
 const eventLabels:Record<string,string>={understood:'自述已理解',confused:'待解疑问',practice:'练习记录',skip:'已跳过',correction:'你的更正',note:'学习笔记'}
 async function handleFile(file?:File){if(!file)return;showUpload.value=false;await upload(file)}
@@ -67,11 +80,22 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <template v-if="lesson">
             <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
-            <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
+            <article v-for="{block:b,index:i} in teachingBlocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
               <span v-if="rewardNotice?.unitId===unit.id && rewardNotice.blockIndex===i" class="earned-xp" role="status">经验 +{{ rewardNotice.points }}</span>
               <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @ask-code="askCode" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint,lesson_revision:lesson?.revision??0})"/>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>
+            <details v-if="originalPages.length" :key="unit.id+'-sources-'+(lesson.revision??0)" class="source-appendix" :open="!teachingBlocks.length">
+              <summary>本节原文 <small>{{originalPages.length}} 页</small></summary>
+              <details v-for="page in originalPages" :key="page.title" class="source-page">
+                <summary>{{page.title}}</summary>
+                <section v-for="{block,index:originalIndex} in page.entries" :id="'block-'+originalIndex" :key="originalIndex">
+                  <pre>{{block.body}}</pre>
+                  <button v-for="id in block.source_ids" :key="id" class="text-btn" @click="openSource(id)">查看出处</button>
+                  <button class="text-btn" @click="bookmark(originalIndex)">{{course.progress.block_index===originalIndex?'上次读到这里':'记住读到这里'}}</button>
+                </section>
+              </details>
+            </details>
             <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
           </template>
           <div v-else class="prepare-card"><span class="round-icon"><Sparkles :size="27"/></span><h2>只准备你现在想学的</h2><p>从这一节开始，保留来源，慢慢往前走。<br/>{{health.model_configured?'DeepSeek 会根据原文准备本节讲解。':'当前可先阅读原文，连接模型后再生成讲解。'}}</p><button class="button primary" @click="prepare" :disabled="busy"><LoaderCircle v-if="busy" class="spin" :size="17"/><BookOpen v-else :size="17"/>{{busy?'正在准备…':'开始这一节'}}</button></div>

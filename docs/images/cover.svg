@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 238" role="img" aria-labelledby="title">
+  <title id="title">循知 · 个人学习 Agent</title>
+  <rect width="1200" height="238" rx="18" fill="#193c32"/>
+  <g font-family="system-ui,'PingFang SC','Microsoft YaHei',sans-serif">
+    <text x="54" y="59" fill="#b6c9a8" font-size="16" letter-spacing="4">XUNZHI</text>
+    <text x="50" y="148" fill="#fffaf0" font-size="77" font-weight="650" letter-spacing="5">循知</text>
+    <text x="56" y="196" fill="#e0e7d6" font-size="23">从一本 PDF 开始的个人学习 Agent</text>
+  </g>
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <path d="m690 129 168 67 202-82-168-66z" fill="#264c40" stroke="#81a48a" stroke-width="2"/>
+    <path d="m690 111 168 66 202-81-168-66z" fill="#47705b" stroke="#afc7a8" stroke-width="2"/>
+    <path d="m690 93 168 66 202-81-168-66z" fill="#e2e9cf" stroke="#e2e9cf" stroke-width="2"/>
+    <path d="m774 126 201-81" stroke="#95ac8d" stroke-width="2"/>
+    <path d="m751 89 100-40m-78 48 86-34m-20 55 97-39m-76 47 62-25" stroke="#9bae96" stroke-width="4"/>
+    <path d="m924 105 27 10v30l-13-10-14 1z" fill="#dbaf70"/>
+  </g>
+</svg>

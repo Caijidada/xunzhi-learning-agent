@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Block } from '../types'
-const props=defineProps<{block:Block}>()
+const props=defineProps<{block:Block;readOnly?:boolean}>()
 const emit=defineEmits<{ask:[text:string]}>()
 const step=ref(0),line=ref(1)
 const lines=computed(()=>props.block.body.split('\n'))
@@ -11,7 +11,7 @@ function ask(){const start=current.value?.line_start??line.value,end=current.val
 </script>
 <template>
   <section class="code-reader">
-    <div class="code-toolbar"><span>{{current?'逐步推演 · 非实际执行':'代码阅读 · 点击行号定位'}}</span><button class="text-btn" @click="ask">询问当前代码</button></div>
+    <div class="code-toolbar"><span>{{current?'逐步推演 · 非实际执行':'代码阅读 · 点击行号定位'}}</span><button v-if="!readOnly" class="text-btn" @click="ask">询问当前代码</button></div>
     <div class="code-lines"><div v-for="(text,i) in lines" :key="i" :class="{highlight:current?i+1>=current.line_start&&i+1<=current.line_end:i+1===line}"><button :aria-label="`选择代码第 ${i+1} 行`" @click="line=i+1;step=-1">{{i+1}}</button><code>{{text||' '}}</code></div></div>
     <div v-if="trace.length" class="code-trace"><div><button :disabled="step<=0" @click="step--">上一步</button><span>{{step+1}} / {{trace.length}}</span><button :disabled="step>=trace.length-1" @click="step++">下一步</button></div><p>{{current?.explanation||'点击下一步开始推演'}}</p><pre v-if="current?.variables">{{current.variables}}</pre></div>
   </section>

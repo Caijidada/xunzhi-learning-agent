@@ -155,8 +155,11 @@ class LearningService:
         turn = {"message": req.message, "selected_text": req.selected_text, "intent": req.intent,
                 "response": response, "mode": mode, "metrics": metrics}
         self.store.save_turn(job_id, course["id"], req.unit_id, turn)
-        if req.intent == "confused":
-            self.store.add_event(course["id"], req.unit_id, "confused", {"text": req.message, "strategy": response["action"]}, f"confusion:{job_id}")
+        event = {"text": req.message, "strategy": response["action"], "turn_id": job_id,
+                 "selected_text": req.selected_text, "block_index": req.block_index,
+                 "lesson_revision": req.lesson_revision}
+        kind = "confused" if req.intent == "confused" else "question"
+        self.store.add_event(course["id"], req.unit_id, kind, event, f"tutor:{job_id}")
         return {"turn_id": job_id, **turn}
 
     def course(self, course_id):
@@ -196,8 +199,8 @@ class LearningService:
     def plan(self, course_id, minutes):
         p = self.store.progress(course_id)
         unit = self.store.unit(course_id, p["unit_id"])
-        confused = next((e for e in self.store.events(course_id) if e["kind"] == "confused"), None)
+        confused = next((e for e in self.store.events(course_id) if e["review_status"] == "pending" or (e["kind"] == "confused" and e["review_status"] != "resolved")), None)
         tasks = [{"title": f"继续：{unit['title']}", "description": "从上次停下的地方开始，学到哪里就保存到哪里。", "minutes": max(3, minutes - (3 if confused else 0))}]
         if confused:
-            tasks.insert(0, {"title": "回到上次的疑问", "description": confused["data"].get("text", "一个未解问题"), "minutes": 3})
+            tasks.insert(0, {"event_id": confused["id"], "title": "回到上次的疑问", "description": confused["data"].get("text", "一个未解问题"), "minutes": 3})
         return {"minutes": minutes, "tasks": tasks, "progress_version": p["version"]}

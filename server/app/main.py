@@ -12,7 +12,7 @@ from .store import Store, uid
 from .service import LearningService
 from .demo import seed_demo
 from .curriculum import route_units
-from .domain import AppError, TurnRequest, ProgressRequest, EventRequest, RegenerateRequest
+from .domain import AppError, TurnRequest, ProgressRequest, EventRequest, RegenerateRequest, ReviewRequest
 
 
 def create_app(settings=None, gateway=None):
@@ -99,6 +99,15 @@ def create_app(settings=None, gateway=None):
     def plan(course_id: str, minutes: int = Query(default=15, ge=5, le=90)):
         return service.plan(course_id, minutes)
 
+    @app.put("/api/courses/{course_id}/learning-events/{event_id}/review")
+    def review_event(course_id: str, event_id: str, req: ReviewRequest):
+        store.save_review(course_id, event_id, req)
+        return {"review_status": req.status, "review_note": req.note}
+
+    @app.get("/api/courses/{course_id}/tutor-turns/{turn_id}")
+    def read_turn(course_id: str, turn_id: str):
+        return store.turn(course_id, turn_id)
+
     @app.post("/api/courses/{course_id}/learning-events")
     def event(course_id: str, req: EventRequest):
         data = {"text": req.text, "used_hint": req.used_hint}
@@ -114,7 +123,7 @@ def create_app(settings=None, gateway=None):
             if block["type"] != "quiz" or req.choice is None or not 0 <= req.choice < len(block["options"]):
                 raise AppError("练习提交无效")
             data.update({"lesson_revision": req.lesson_revision, "correct": req.choice == block["answer"], "choice": req.choice, "block_index": req.block_index,
-                         "text": req.text or block["body"]})
+                         "chosen_answer": block["options"][req.choice], "text": block["body"]})
         event_id = store.add_event(course_id, req.unit_id, req.kind, data, f"{course_id}:{req.request_id}", req.target_id)
         awarded=False
         if req.kind=='practice' and data['correct']:

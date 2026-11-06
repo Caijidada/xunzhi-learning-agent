@@ -33,6 +33,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS generation_drafts(id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS rewards(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, points INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS progress(course_id TEXT PRIMARY KEY, unit_id TEXT NOT NULL, block_index INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS reviews(event_id TEXT PRIMARY KEY, status TEXT NOT NULL, note TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL, request_id TEXT UNIQUE NOT NULL, superseded INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, dedup_key TEXT UNIQUE NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', result TEXT, error TEXT, created REAL NOT NULL, updated REAL NOT NULL);
@@ -172,8 +173,24 @@ class Store:
 
     def events(self, course_id):
         with self.connection() as db:
-            rows = db.execute("SELECT * FROM events WHERE course_id=? AND superseded=0 ORDER BY created DESC LIMIT 100", (course_id,)).fetchall()
+            rows = db.execute("SELECT e.*, r.status AS review_status,r.note AS review_note FROM events e LEFT JOIN reviews r ON r.event_id=e.id WHERE course_id=? AND superseded=0 ORDER BY created DESC LIMIT 100", (course_id,)).fetchall()
         return [{**dict(r), "data": json.loads(r["data"])} for r in rows]
+
+    def save_review(self, course_id, event_id, review):
+        with self.connection() as db:
+            updated = db.execute(
+                "INSERT OR REPLACE INTO reviews(event_id,status,note) "
+                "SELECT id,?,? FROM events WHERE id=? AND course_id=? AND superseded=0",
+                (review.status, review.note, event_id, course_id))
+            if not updated.rowcount:
+                raise AppError("找不到这条学习记录", "NOT_FOUND", 404)
+
+    def turn(self, course_id, turn_id):
+        with self.connection() as db:
+            row = db.execute("SELECT id,data FROM turns WHERE course_id=? AND id=?", (course_id, turn_id)).fetchone()
+        if not row:
+            raise AppError("找不到这次问答", "NOT_FOUND", 404)
+        return {"id": row["id"], "data": json.loads(row["data"])}
 
     def add_event(self, course_id, unit_id, kind, data, request_id, target_id=None):
         self.unit(course_id, unit_id)

@@ -75,7 +75,14 @@ class TutorResponse(BaseModel):
     blocks: list[Block] = Field(min_length=1, max_length=6)
 
 
+class ReviewRequest(BaseModel):
+    status: Literal["pending", "resolved"]
+    note: str = Field(default="", max_length=3000)
+
+
 class TurnRequest(BaseModel):
+    block_index: int | None = Field(default=None, ge=0)
+    lesson_revision: int = Field(default=0, ge=0)
     request_id: str = Field(min_length=8, max_length=100)
     unit_id: str
     message: str = Field(min_length=1, max_length=4000)

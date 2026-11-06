@@ -347,3 +347,22 @@ def test_curriculum_model_cannot_invent_unit_ids(tmp_path):
     with pytest.raises(AppError) as error:
         asyncio.run(gateway.generate('审阅',{'units':[{'unit_id':'real','title':'正文'}]},CurriculumReview))
     assert error.value.code=='OUTPUT_INVALID'
+
+
+def test_review_keeps_question_location_and_original_exchange(client):
+    base = '/api/courses/course_demo'
+    question = {'request_id':'review-question-1','unit_id':'demo_unit_1','message':'这里做了什么？',
+                'selected_text':'当前片段','block_index':1,'lesson_revision':0}
+    job = client.post(base+'/tutor-turns', json=question).json()
+    assert wait_job(client, job['id'])['status'] == 'completed'
+    event = client.get(base).json()['events'][0]
+    assert event['kind'] == 'question' and event['data']['block_index'] == 1
+    turn = client.get(base+'/tutor-turns/'+event['data']['turn_id']).json()
+    assert turn['data']['selected_text'] == '当前片段' and turn['data']['response']['blocks']
+    url = base+'/learning-events/'+event['id']+'/review'
+    for status in ('pending','resolved'):
+        assert client.put(url,json={'status':status,'note':'我的解释'}).status_code == 200
+        latest = client.get(base).json()['events'][0]
+        assert latest['data'] == event['data'] and latest['review_status'] == status
+        tasks = client.get(base+'/session-plan').json()['tasks']
+        assert any(t['title']=='回到上次的疑问' for t in tasks) == (status=='pending')

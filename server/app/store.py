@@ -31,6 +31,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS lessons(unit_id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS lesson_versions(unit_id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(unit_id,revision));
             CREATE TABLE IF NOT EXISTS generation_drafts(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS rewards(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, points INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS progress(course_id TEXT PRIMARY KEY, unit_id TEXT NOT NULL, block_index INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL, request_id TEXT UNIQUE NOT NULL, superseded INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, unit_id TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
@@ -121,6 +122,15 @@ class Store:
         with self.connection() as db:
             r=db.execute('SELECT data FROM generation_drafts WHERE id=?',(job_id,)).fetchone()
         return json.loads(r[0]) if r else None
+
+    def award(self, key, course_id):
+        with self.connection() as db:
+            inserted=db.execute('INSERT OR IGNORE INTO rewards VALUES(?,?,1)',(key,course_id)).rowcount
+        return bool(inserted)
+
+    def experience(self, course_id):
+        with self.connection() as db:
+            return db.execute('SELECT COALESCE(SUM(points),0) FROM rewards WHERE course_id=?',(course_id,)).fetchone()[0]
 
     def save_generation(self, job_id, data):
         with self.connection() as db:

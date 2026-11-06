@@ -116,6 +116,18 @@ def test_invalid_upload_rejected(client):
     assert client.post('/api/documents',files={'file':('x.pdf',b'not a pdf','application/pdf')}).status_code==400
 
 
+def test_quiz_experience_is_awarded_once_per_question(client):
+    body={'request_id':'reward-answer-001','unit_id':'demo_unit_1','kind':'practice','block_index':4,'choice':1}
+    first=client.post('/api/courses/course_demo/learning-events',json=body)
+    assert first.json()['xp_awarded']==1
+    assert client.post('/api/courses/course_demo/learning-events',json=body).json()['xp_awarded']==0
+    body['request_id']='reward-answer-002'
+    assert client.post('/api/courses/course_demo/learning-events',json=body).json()['xp_awarded']==0
+    rewards=client.get('/api/courses/course_demo').json()['rewards']
+    assert rewards['xp']==1 and rewards['level']==1
+    assert len(rewards['levels'])==3
+
+
 def test_curriculum_routes_existing_content_without_losing_progress(client):
     store=client.app.state.store
     with store.connection() as db:
@@ -203,6 +215,24 @@ def test_model_auth_error_is_not_leaked(tmp_path):
         asyncio.run(gateway.generate('Teach',{'sources':[]},Lesson))
     assert 'secret-value' not in exc.value.message
     assert exc.value.code=='MODEL_AUTH'
+
+
+def test_legacy_step_cards_are_repaired_in_new_generation(tmp_path):
+    calls=[]
+    def handle(request):
+        calls.append(request)
+        block={'type':'diagram','source_ids':['s'],'steps':[{'label':'A','detail':'a'},{'label':'B','detail':'b'}]} if len(calls)==1 else {'type':'text','body':'用对照解释即可','source_ids':['s']}
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps({'title':'解释','summary':'说明','blocks':[block]})}}]})
+    gateway=ModelGateway(Settings(tmp_path,api_key='test'),httpx.MockTransport(handle))
+    result,_=asyncio.run(gateway.generate('解释',{'sources':[{'id':'s','text':'source'}]},Lesson))
+    assert len(calls)==2 and result['blocks'][0]['type']=='text'
+
+
+def test_code_trace_cannot_reference_missing_lines():
+    from server.app.domain import Block
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Block(type='code',body='print(1)',code_trace=[{'line_start':1,'line_end':2,'explanation':'错误行范围'}])
 
 
 def test_tutor_can_choose_nonvisual_method_and_retain_feedback(tmp_path):

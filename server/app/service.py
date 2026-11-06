@@ -162,8 +162,18 @@ class LearningService:
     def course(self, course_id):
         course = self.store.get("courses", course_id)
         doc = self.store.get("documents", course["document_id"])
+        units=route_units(course,self.store.units(course_id))
+        if 'reward_levels' not in course:
+            chapters={}
+            for u in units:
+                if u['category']=='learn': chapters.setdefault(u['chapter'],u['chapter_title'])
+            course['reward_levels']=[{'level':i+1,'title':title,'required_xp':i*3} for i,title in enumerate(chapters.values())] or [{'level':1,'title':'开始探索','required_xp':0}]
+            self.store.put('courses',course_id,course)
+        xp=self.store.experience(course_id)
+        level=next(l for l in reversed(course['reward_levels']) if xp>=l['required_xp'])
         return {**course, "units": route_units(course, self.store.units(course_id)), "progress": self.store.progress(course_id),
-                "document": {k: v for k, v in doc.items() if k != "path"}, "events": self.store.events(course_id)}
+                "document": {k: v for k, v in doc.items() if k != "path"}, "events": self.store.events(course_id),
+                'rewards':{'xp':xp,**level,'levels':course['reward_levels']}}
 
     async def _curriculum(self, job_id, payload):
         course = self.store.get('courses', payload['course_id'])

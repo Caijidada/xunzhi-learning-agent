@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 import hashlib
+import json
 import time
 from fastapi import FastAPI, UploadFile, File, Query
 from fastapi.responses import JSONResponse, FileResponse
@@ -115,7 +116,11 @@ def create_app(settings=None, gateway=None):
             data.update({"lesson_revision": req.lesson_revision, "correct": req.choice == block["answer"], "choice": req.choice, "block_index": req.block_index,
                          "text": req.text or block["body"]})
         event_id = store.add_event(course_id, req.unit_id, req.kind, data, f"{course_id}:{req.request_id}", req.target_id)
-        return {"id": event_id, "data": data}
+        awarded=False
+        if req.kind=='practice' and data['correct']:
+            identity=hashlib.sha256(json.dumps([block['body'],block['options']],ensure_ascii=False).encode()).hexdigest()
+            awarded=store.award(f'quiz:{course_id}:{req.unit_id}:{identity}',course_id)
+        return {"id": event_id, "data": data, "xp_awarded": 1 if awarded else 0}
 
     @app.post("/api/documents", status_code=202)
     async def upload(file: UploadFile = File(...)):

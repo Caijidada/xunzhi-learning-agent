@@ -132,7 +132,6 @@ export function useWorkspace() {
           await refreshPlan()
         }
       }
-      if(done.status==='failed') error.value = done.error?.message || done.message
       if(done.status==='completed') localStorage.removeItem('xunzhi.pending')
     } catch(e) { error.value = e instanceof Error ? e.message : '连接中断，重新打开后可以继续。' }
   }

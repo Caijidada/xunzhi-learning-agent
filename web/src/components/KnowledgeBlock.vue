@@ -34,3 +34,22 @@ function submit(){if(selected.value===null)return;submitted.value=true;emit('pra
     </div>
   </div>
 </template>
+
+<style scoped>
+.block-inner, .prose { min-width: 0; }
+.prose { overflow-x: auto; }
+.prose :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: .85em;
+}
+.prose :deep(th), .prose :deep(td) {
+  padding: .55em .8em;
+  text-align: start;
+  vertical-align: top;
+  border: 1px solid #dce4d7;
+  min-width: 5em;
+  overflow-wrap: anywhere;
+}
+.prose :deep(th) { background: #eff4eb; color: #385448; }
+</style>

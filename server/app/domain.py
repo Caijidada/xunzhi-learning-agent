@@ -15,7 +15,13 @@ class CodeStep(BaseModel):
     variables: str = Field(default='', max_length=1500)
 
 
+class Recall(BaseModel):
+    question: str = Field(min_length=12, max_length=400)
+    answer: str = Field(min_length=8, max_length=1000)
+
+
 class Block(BaseModel):
+    recall: Recall | None = None
     model_config = ConfigDict(extra="forbid")
     type: Literal["text", "callout", "diagram", "quiz", "code", "scene", "source"]
     title: str = Field(default="", max_length=150)

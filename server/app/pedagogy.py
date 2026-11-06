@@ -21,7 +21,7 @@ scene 用 900×500 画布表示对象与关系；节点宽160高80，坐标为�
 # A diagram is retained for old content, but new visual explanations must be actual scenes.
 TEACHING_POLICY += "\n新输出不要生成 diagram 类型的顺序高亮卡片。如果适合视觉演示，使用 scene 表达关系、状态变化或情境差异；否则使用文字或代码。原文中的关键代码不能省略。代码请使用 code 块，code_trace 可注明每步 line_start、line_end、explanation、variables；必须与实际代码对应，不伪称运行结果。\n"
 
-LESSON_TASK = "为当前小节生成易消化的中文学习内容。根据知识难点选择结构与内容块数量，不强制类比、图解、例子或练习，不按固定教学模板凑内容。明确本次覆盖的范围。"
+LESSON_TASK = "为当前小节生成易消化的中文学习内容。根据知识难点选择结构与内容块数量，不强制类比、图解、例子或练习，不按固定教学模板凑内容。重要知识块可附 recall，一批精选一到两个。题干给出具体对象与条件，要求预测结果、解释原因或区分相近概念。answer 要给出能从本块核对的理由。导读、目录和覆盖范围不出题。避免仅询问某个标题讲了什么。"
 
 TUTOR_TASK = "解决当前问题，依据教学策略自主选择方法。教学方法用 teaching.approach 自由描述；action 只是兼容界面的粗粒度分类，不限制教学方法。内容量以解决当前困难为准，避免无关扩展。"
 

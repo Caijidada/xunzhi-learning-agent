@@ -139,10 +139,10 @@ class LearningService:
             start = position['block_index'] if position['unit_id'] == unit['id'] else 0
             start = min(start, max(0, len(current_blocks) - 1))
             response, metrics = await self.gateway.generate(
-                TUTOR_TASK,
+                TUTOR_TASK + (" 当前问题指向 selected_text 中的选区。先引用选区中的关键字并解释它。历史对话、书签附近的讲解和检索材料仅用于补充，不能替换选区。" if req.selected_text else ""),
                 {"question": req.message, "intent": req.intent, "selected_text": req.selected_text, "unit": unit["title"],
                  "sources": sources, "history": [t["data"] for t in history], "current_learning_records": records,
-                 "current_explanation": current_blocks[max(0, start-1):start+2],
+                 "current_explanation": [] if req.selected_text else current_blocks[max(0, start-1):start+2],
                  "display_capabilities": DISPLAY_CAPABILITIES}, TutorResponse)
             mode = "ai"
         elif course.get("demo"):

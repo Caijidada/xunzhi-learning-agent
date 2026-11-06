@@ -7,7 +7,7 @@ const step=ref(0),line=ref(1)
 const lines=computed(()=>props.block.body.split('\n'))
 const trace=computed(()=>props.block.code_trace??[])
 const current=computed(()=>trace.value[step.value])
-function ask(){const start=current.value?.line_start??line.value,end=current.value?.line_end??line.value;emit('ask',`关于「${props.block.title||'代码'}」第 ${start}–${end} 行：\n${lines.value.slice(start-1,end).join('\n')}\n\n完整代码上下文：\n${props.block.body}`)}
+function ask(){const start=current.value?.line_start??line.value,end=current.value?.line_end??line.value;emit('ask',`关于「${props.block.title||'代码'}」第 ${start}–${end} 行：\n${lines.value.slice(start-1,end).join('\n')}`)}
 </script>
 <template>
   <section class="code-reader">

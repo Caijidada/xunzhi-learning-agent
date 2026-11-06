@@ -25,7 +25,7 @@ async function handleFile(file?:File){if(!file)return;showUpload.value=false;awa
 function onDrop(e:DragEvent){dragging.value=false;handleFile(e.dataTransfer?.files[0])}
 function beginEdit(e:LearningEvent){editEvent.value=e;editText.value=e.data.text}
 async function saveCorrection(){if(editEvent.value&&editText.value.trim()){await correct(editEvent.value,editText.value.trim());editEvent.value=null}}
-async function askCode(text:string){rightCollapsed.value=false;selected.value=text.slice(0,3000);message.value='请解释这段代码，结合上下文说明这一行到下一步发生了什么。';await nextTick();document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus()}
+async function askCode(text:string){rightCollapsed.value=false;selected.value=text.slice(0,3000);message.value='请逐行解释选中的代码，并说明它在这里的作用。';await nextTick();document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus()}
 function saveDepth(){localStorage.setItem('xunzhi.depth',depth.value)}
 function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 </script>

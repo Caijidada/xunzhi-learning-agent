@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Upload, X, Sparkles, Clock3, Bookmark, Check, MessageCircle, Send, FileText, Settings2, CircleHelp, Layers3, Leaf, Library, History, RotateCcw, LoaderCircle, PanelLeftClose, Menu, Quote, Lightbulb, SlidersHorizontal } from '@lucide/vue'
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
 import SceneDialog from './components/SceneDialog.vue'
+import FocusTimer from './components/FocusTimer.vue'
 import { useWorkspace } from './useWorkspace'
+import { usePanels } from './usePanels'
 import type { Block, LearningEvent } from './types'
-const {depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+const {rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
+const {leftCollapsed,rightCollapsed,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey}=usePanels()
+function toggleLeft(){leftCollapsed.value=!leftCollapsed.value;sidebar.value=!leftCollapsed.value}
 const showUpload=ref(false),showSettings=ref(false),sidebar=ref(false),dragging=ref(false),fileInput=ref<HTMLInputElement|null>(null)
 const activeScene=ref<Block|null>(null)
 watch(()=>unit.value?.id,()=>{activeScene.value=null})
@@ -21,7 +25,7 @@ async function handleFile(file?:File){if(!file)return;showUpload.value=false;awa
 function onDrop(e:DragEvent){dragging.value=false;handleFile(e.dataTransfer?.files[0])}
 function beginEdit(e:LearningEvent){editEvent.value=e;editText.value=e.data.text}
 async function saveCorrection(){if(editEvent.value&&editText.value.trim()){await correct(editEvent.value,editText.value.trim());editEvent.value=null}}
-function askCode(text:string){selected.value=text.slice(0,3000);message.value='请解释这段代码，结合上下文说明这一行到下一步发生了什么。';document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus()}
+async function askCode(text:string){rightCollapsed.value=false;selected.value=text.slice(0,3000);message.value='请解释这段代码，结合上下文说明这一行到下一步发生了什么。';await nextTick();document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus()}
 function saveDepth(){localStorage.setItem('xunzhi.depth',depth.value)}
 function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 </script>
@@ -35,16 +39,17 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
     </header>
 
     <div v-if="!loading && health.api_revision!=='learning-scenes-v1'" class="error-banner" role="alert">页面已更新，但后台服务仍是旧版本。请停止原项目进程，再运行 .venv/bin/python scripts/dev.py，然后刷新页面。</div>
+    <div v-if="rewardNotice" class="reward-toast" role="status">{{rewardNotice}}<button @click="rewardNotice=''" aria-label="关闭奖励提示">×</button></div>
     <div v-if="error" class="error-banner" role="alert"><CircleHelp :size="17"/><span>{{error}}</span><button class="icon-btn" @click="error=''" aria-label="关闭提示"><X :size="16"/></button></div>
     <div v-if="job && job.status!=='completed'" class="job-banner" :class="{'job-error':['failed','interrupted'].includes(job.status)}"><LoaderCircle v-if="busy" :size="15" class="spin"/><span>{{job.message||'正在准备…'}}</span><button v-if="busy" class="text-btn" @click="cancel">停止</button><button v-else-if="['failed','interrupted','cancelled'].includes(job.status)" class="text-btn" @click="retry"><RotateCcw :size="13"/>继续尝试</button></div>
 
     <div v-if="loading" class="initial-loading"><span class="brand-symbol"><Layers3 :size="28"/></span><p>打开你的学习空间…</p><LoaderCircle class="spin" :size="20"/></div>
 
     <template v-else-if="view==='learn'&&course">
-      <div class="workspace-heading"><div class="breadcrumbs"><button class="icon-btn mobile-menu" @click="sidebar=!sidebar" aria-label="展开学习目录"><Menu :size="19"/></button><span>我的学习</span><ChevronRight :size="13"/><span>{{course.title}}</span></div><span class="quiet-status"><span class="status-dot"></span>进度自动保留</span></div>
-      <div class="workspace-layout">
+      <div class="workspace-heading"><div class="breadcrumbs"><button class="icon-btn mobile-menu" @click="toggleLeft" aria-label="展开学习目录"><Menu :size="19"/></button><span>我的学习</span><ChevronRight :size="13"/><span>{{course.title}}</span></div><div class="panel-controls"><button class="text-btn" @click="toggleLeft" :aria-expanded="!leftCollapsed">{{leftCollapsed?'展开目录':'收起目录'}}</button><button class="text-btn" @click="rightCollapsed=!rightCollapsed" :aria-expanded="!rightCollapsed">{{rightCollapsed?'展开问答':'收起问答'}}</button></div></div>
+      <div class="workspace-layout" :class="{'left-collapsed':leftCollapsed,'right-collapsed':rightCollapsed}" :style="{'--right-size':rightWidth+'px'}">
         <aside class="course-sidebar" :class="{open:sidebar}">
-          <div class="sidebar-label">你的学习路径 <button class="icon-btn" @click="sidebar=false" aria-label="收起目录"><PanelLeftClose :size="16"/></button></div>
+          <div class="sidebar-label">你的学习路径 <button class="icon-btn" @click="leftCollapsed=true;sidebar=false" aria-label="收起目录"><PanelLeftClose :size="16"/></button></div>
           <div class="course-mini-cover"><span class="eyebrow">LEARNING JOURNEY</span><BookOpen :size="32" :stroke-width="1.3"/><h2>{{course.title}}</h2><span>{{course.units.length}} 个学习单元 · 随时开始</span><div class="cover-orbit orbit-one"></div><div class="cover-orbit orbit-two"></div></div>
           <div class="course-selector"><select aria-label="切换课程" :value="course.id" @change="guard(()=>openCourse(($event.target as HTMLSelectElement).value))"><option v-for="c in courses" :key="c.id" :value="c.id">{{c.title}}</option></select><ChevronDown :size="14"/></div>
           <div class="path-controls"><button class="text-btn" @click="showExtras=!showExtras">{{showExtras?'收起导读与附属内容':'查看导读与附属内容'}}</button><button class="text-btn" @click="curate" :disabled="busy||!health.model_configured">根据原文优化路径</button></div>
@@ -74,7 +79,9 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
         </main>
 
         <aside class="companion-sidebar">
-          <section class="session-card"><div class="session-top"><span><Leaf :size="16"/>这次，留一点时间给自己</span><select aria-label="本次学习时间" v-model.number="minutes" @change="guard(refreshPlan)"><option :value="10">10 分钟</option><option :value="15">15 分钟</option><option :value="25">25 分钟</option><option :value="40">40 分钟</option></select></div><div v-for="(task,i) in plan.tasks" :key="i" class="session-task"><span class="task-circle">{{i+1}}</span><div><strong>{{task.title}}</strong><p>{{task.description}}</p></div></div><div class="session-caption">根据实际进度安排，今天学多少都可以。</div></section>
+          <button class="panel-resizer" role="separator" aria-label="调整问答栏宽度" aria-orientation="vertical" :aria-valuenow="rightWidth" :aria-valuemin="280" :aria-valuemax="650" @pointerdown="resizeStart" @pointermove="resizeMove" @pointerup="resizeEnd" @pointercancel="resizeEnd" @lostpointercapture="resizeEnd" @keydown="resizeKey"></button>
+          <div class="companion-scroll">
+          <section class="session-card"><div class="session-top"><span><Leaf :size="16"/>这次，留一点时间给自己</span><select aria-label="本次学习时间" v-model.number="minutes" @change="guard(refreshPlan)"><option :value="10">10 分钟</option><option :value="15">15 分钟</option><option :value="25">25 分钟</option><option :value="40">40 分钟</option></select></div><FocusTimer :key="course.id" :course-id="course.id" :minutes="minutes"/><div v-if="course.rewards" class="reward-card"><strong>Lv.{{course.rewards.level}} · {{course.rewards.title}}</strong><span>{{course.rewards.xp}} XP</span><details><summary>章节等级路线</summary><p v-for="level in course.rewards.levels" :key="level.level">Lv.{{level.level}} · {{level.title}} · {{level.required_xp}} XP</p><small>同一道题首次答对 +1 XP；等级仅用于鼓励，不限制章节。</small></details></div><div v-for="(task,i) in plan.tasks" :key="i" class="session-task"><span class="task-circle">{{i+1}}</span><div><strong>{{task.title}}</strong><p>{{task.description}}</p></div></div><div class="session-caption">根据实际进度安排，今天学多少都可以。</div></section>
           <section class="chat-card">
             <div class="chat-heading"><span class="assistant-avatar"><Sparkles :size="19"/></span><div><h2>你的学习伙伴</h2><p>不明白的地方，我们一起拆开看。</p></div><span class="chat-status" :class="{online:health.model_configured}" :title="health.model_configured?'已配置模型':'示例 / 原文模式'"></span></div>
             <div class="chat-messages" aria-live="polite">
@@ -84,6 +91,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
             </div>
             <div class="chat-composer"><div v-if="selected" class="selection-chip"><Quote :size="13"/><span>{{selected.slice(0,55)}}{{selected.length>55?'…':''}}</span><button @click="selected=''" aria-label="清除选中文字"><X :size="12"/></button></div><form @submit.prevent="send()"><textarea v-model="message" placeholder="这个地方，我想再问问…" aria-label="向学习伙伴提问" rows="2" @keydown.enter.exact.prevent="send()"></textarea><div class="composer-bottom"><span>跟着你的问题，换一种讲法</span><button :disabled="busy||!message.trim()" type="submit" aria-label="发送问题"><Send :size="16"/></button></div></form><p v-if="!health.model_configured" class="connection-note"><span></span>{{course.demo?'示例体验：回答为预设内容':'未连接模型：当前仅检索原文'}}<button @click="showSettings=true">连接 DeepSeek</button></p><p v-else class="connection-note"><span class="connected"></span>已连接 {{health.provider}} · 重要内容请核对出处</p></div>
           </section>
+          </div>
         </aside>
       </div>
     </template>

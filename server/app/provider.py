@@ -14,9 +14,25 @@ SYSTEM = """你是耐心的中文学习导师。用户自己决定学习进度�
 输出严格 json，遵守给出的 JSON Schema，不要输出额外字段或 Markdown 代码围栏。
 不要声称知道用户已掌握知识。记忆更正优先于旧对话；不输出隐藏思维过程。
 所有讲解和示例关联 source_ids；clarify 动作的澄清问题可以没有出处。
-文字简短清晰，每段一个意思。仅在解释过程有帮助时生成 diagram；steps 每步包含 label 和 detail。
+文字简短清晰，每段一个意思。需要演示关系或状态变化时使用 scene。
 quiz 的 body 是题目，options 是选项，answer 是零起始正确下标，explanation 是解释。
 """ + TEACHING_POLICY
+
+
+class OutputIssue(ValueError):
+    """Messages here contain only application-defined rules and numeric positions."""
+
+
+def structure_issue(error):
+    issue = error.errors(include_input=False, include_context=False)[0]
+    path = issue['loc']
+    prefix = f"第 {path[1]+1} 个内容块" if len(path)>1 and path[0]=='blocks' and isinstance(path[1], int) else "输出"
+    if issue['type'] == 'json_invalid':
+        return "返回内容不是完整有效的 JSON"
+    # Extra-field errors may name arbitrary provider text. Report only known schema fields.
+    fields = {'title','body','source_ids','options','answer','explanation','scene','code_trace','recall','question','steps','blocks','choices'}
+    field = next((part for part in reversed(path) if part in fields), '')
+    return f"{prefix}的 {field} 字段未满足格式要求" if field else f"{prefix}未满足结构要求"
 
 
 class ModelGateway:
@@ -52,26 +68,34 @@ class ModelGateway:
                     data = response.json()
                     for key in usage:
                         usage[key] += int(data.get("usage", {}).get(key, 0) or 0)
-                    text = data["choices"][0]["message"]["content"]
+                    choice = data["choices"][0]
+                    if choice.get("finish_reason") == "length":
+                        raise OutputIssue("本次回复达到输出长度上限，请缩短本批讲解并保留完整 JSON")
+                    text = choice["message"]["content"]
                     value = schema.model_validate_json(text)
                     allowed = {s["id"] for s in context.get("sources", [])}
-                    for block in getattr(value, 'blocks', []):
+                    for number, block in enumerate(getattr(value, 'blocks', []), 1):
                         if block.type == 'diagram':
-                            raise ValueError('新输出不使用顺序高亮步骤图，请用 scene 或文字代码解释')
+                            raise OutputIssue('新输出不使用顺序高亮步骤图，请用 scene 或文字代码解释')
                         if not set(block.source_ids).issubset(allowed):
-                            raise ValueError("引用 ID 不在提供的材料中")
+                            raise OutputIssue(f"第 {number} 个内容块引用了本批材料以外的来源 ID")
                         if not block.source_ids and getattr(value, "action", "") != "clarify":
-                            raise ValueError("教学内容需要来源 ID")
+                            raise OutputIssue(f"第 {number} 个内容块缺少来源 ID")
                     if getattr(value, "action", "") == "step_diagram" and not any(b.type in {"diagram", "scene"} for b in value.blocks):
-                        raise ValueError("step_diagram 动作需要实际图解")
+                        raise OutputIssue("step_diagram 动作需要实际图解")
                     if hasattr(value, 'choices'):
                         expected = {u['unit_id'] for u in context['units']}
                         actual = [c.unit_id for c in value.choices]
                         if set(actual) != expected or len(actual) != len(expected):
-                            raise ValueError('课程筛选必须覆盖且仅覆盖给定单元')
+                            raise OutputIssue('课程筛选必须覆盖且仅覆盖给定单元')
                     return value.model_dump(), {"model": self.settings.model, "calls": attempt + 1,
                                                "duration_ms": round((time.monotonic() - started) * 1000), "usage": usage}
-                except (ValidationError, ValueError, KeyError, IndexError, TypeError):
-                    # A single bounded schema repair. Never log provider bodies (they may contain private text).
-                    messages.append({"role": "user", "content": "上次输出未通过结构或来源校验。请重新输出严格 json，遵循 schema，教学内容引用 sources 中真实的 source_ids。不要生成 diagram 类型：适合演示时用 scene，否则用文字或代码。"})
-        raise AppError("生成内容未通过结构或引用检查，请重试", "OUTPUT_INVALID", 502)
+                except OutputIssue as exc:
+                    reason = str(exc)
+                except ValidationError as exc:
+                    reason = structure_issue(exc)
+                except (ValueError, KeyError, IndexError, TypeError):
+                    reason = "模型接口返回的数据不完整"
+                if attempt == 0:
+                    messages.append({"role":"user", "content": f"请重新生成完整 JSON。上次的问题是：{reason}。严格遵循 schema；教学内容仅引用本批 sources 中的 ID。"})
+        raise AppError(f"自动修正后仍未通过校验：{reason}", "OUTPUT_INVALID", 502)

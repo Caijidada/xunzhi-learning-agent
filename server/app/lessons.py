@@ -16,7 +16,12 @@ async def build_lesson(service, job_id, course, unit, depth):
             batch=batches[i]
             service.store.update_job(job_id,'running',f'正在准备第 {i+1}/{len(batches)} 部分，已保存内容可继续恢复')
             instruction=LESSON_TASK+(' 完整学习：逐个解释本批原文的重要定义、条件、限制、反例及代码，不能只做摘要。有代码必须保留关键代码并解释，可用 code_trace 标注执行顺序；不得伪称执行过。这里只是本节的一部分，不要每批重复引言和结尾。' if depth=='full' else ' 快速学习：聚焦重点，明确省略范围；关键代码仍应保留。')
-            lesson,metrics=await service.gateway.generate(instruction,{'unit':unit['title'],'part':i+1,'parts':len(batches),'sources':batch,'display_capabilities':DISPLAY_CAPABILITIES},Lesson)
+            try:
+                lesson,metrics=await service.gateway.generate(instruction,{'unit':unit['title'],'part':i+1,'parts':len(batches),'sources':batch,'display_capabilities':DISPLAY_CAPABILITIES},Lesson)
+            except AppError as exc:
+                if exc.code == 'OUTPUT_INVALID':
+                    raise AppError(f"第 {i+1}/{len(batches)} 批：{exc.message}。重试会从本批继续。", exc.code, exc.status) from exc
+                raise
             draft['blocks'].extend(lesson['blocks']);draft['metrics'].append(metrics)
             draft['summary']=draft.get('summary',lesson['summary']);draft['next']=i+1
             service.store.save_generation(job_id,draft)

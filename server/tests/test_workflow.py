@@ -205,6 +205,7 @@ def test_deepseek_output_validated_with_bounded_repair(tmp_path):
     gateway=ModelGateway(Settings(tmp_path,api_key='test-not-real'),httpx.MockTransport(handle))
     lesson,metrics=asyncio.run(gateway.generate('Teach',{'sources':[{'id':'real-source','text':'Source text'}]},Lesson))
     assert len(calls)==2 and metrics['calls']==2 and metrics['usage']['total_tokens']==20
+    assert '第 1 个内容块引用了本批材料以外的来源 ID' in calls[1]['messages'][-1]['content']
     assert calls[0]['response_format']=={'type':'json_object'}
     assert lesson['blocks'][0]['source_ids']==['real-source']
 
@@ -398,3 +399,18 @@ def test_switch_depth_reuses_revisions_and_bookmarks(client):
     store.replace_lesson('course_demo','demo_unit_1', dict(quick), 0)
     assert store.lesson('demo_unit_1')['revision'] == 2
     assert client.post(base+'/activate?depth=full&revision=0').status_code == 409
+
+
+def test_truncated_lesson_reports_batch(tmp_path):
+    attempts = []
+    def respond(request):
+        attempts.append(request)
+        return httpx.Response(200,json={'choices':[{'finish_reason':'length','message':{'content':'{'}}]})
+    settings = Settings(tmp_path,api_key='test')
+    app = create_app(settings,ModelGateway(settings,httpx.MockTransport(respond)))
+    with TestClient(app) as c:
+        url='/api/courses/course_demo/units/demo_unit_1/regenerate'
+        job=c.post(url,json={'request_id':'truncated-lesson-01','expected_revision':0}).json()
+        failure=wait_job(c,job['id'])['error']
+        assert failure['code']=='OUTPUT_INVALID' and len(attempts)==2
+        assert '第 1/1 批' in failure['message'] and '输出长度上限' in failure['message']

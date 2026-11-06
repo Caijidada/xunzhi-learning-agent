@@ -75,6 +75,10 @@ def create_app(settings=None, gateway=None):
         return service.submit(f'regenerate:{course_id}:{unit_id}:{req.request_id}', 'regenerate',
                               {'course_id': course_id, 'unit_id': unit_id, 'expected_revision': req.expected_revision, 'depth': req.depth})
 
+    @app.post('/api/courses/{course_id}/units/{unit_id}/activate')
+    def activate(course_id: str, unit_id: str, depth: Literal['full','quick'], revision: int = Query(ge=0)):
+        return {"lesson": store.activate_depth(course_id, unit_id, depth, revision)}
+
     @app.get('/api/courses/{course_id}/units/{unit_id}/versions')
     def versions(course_id: str, unit_id: str):
         store.unit(course_id, unit_id)

@@ -376,3 +376,25 @@ def test_start_button_resumes_cancelled_prepare(client):
     resumed = client.post('/api/courses/course_demo/units/demo_unit_1/prepare?depth=full').json()
     assert resumed['id'] == job['id']
     assert wait_job(client, resumed['id'])['status'] == 'completed'
+
+
+def test_switch_depth_reuses_revisions_and_bookmarks(client):
+    store = client.app.state.store
+    base = '/api/courses/course_demo/units/demo_unit_1'
+    quick = store.lesson('demo_unit_1')
+    quick['depth'] = 'quick'
+    store.save_lesson('demo_unit_1', quick)
+    assert client.post(base+'/activate?depth=full&revision=0').json()['lesson'] is None
+    with store.connection() as db:
+        db.execute("UPDATE progress SET block_index=2 WHERE course_id='course_demo'")
+    full = {**quick, 'depth':'full'}
+    store.replace_lesson('course_demo','demo_unit_1', full, 0)
+    for _ in range(2):
+        assert client.post(base+'/activate?depth=quick&revision=1').json()['lesson']['depth'] == 'quick'
+        assert store.progress('course_demo')['block_index'] == 2
+        assert client.post(base+'/activate?depth=full&revision=0').json()['lesson']['revision'] == 1
+        assert store.progress('course_demo')['block_index'] == 0
+    client.post(base+'/activate?depth=quick&revision=1')
+    store.replace_lesson('course_demo','demo_unit_1', dict(quick), 0)
+    assert store.lesson('demo_unit_1')['revision'] == 2
+    assert client.post(base+'/activate?depth=full&revision=0').status_code == 409

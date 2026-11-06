@@ -29,6 +29,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS courses(id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, position INTEGER NOT NULL, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS lessons(unit_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS lesson_positions(unit_id TEXT NOT NULL, revision INTEGER NOT NULL, block_index INTEGER NOT NULL, PRIMARY KEY(unit_id,revision));
             CREATE TABLE IF NOT EXISTS lesson_versions(unit_id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(unit_id,revision));
             CREATE TABLE IF NOT EXISTS generation_drafts(id TEXT PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS rewards(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, points INTEGER NOT NULL);
@@ -145,9 +146,43 @@ class Store:
             if not old or old.get('revision', 0) != expected_revision:
                 raise AppError('讲解已变化，请刷新后重试', 'VERSION_CONFLICT', 409)
             db.execute('INSERT OR IGNORE INTO lesson_versions VALUES(?,?,?)', (unit_id, expected_revision, encode(old)))
-            lesson['revision'] = expected_revision + 1
+            latest = db.execute('SELECT MAX(revision) FROM lesson_versions WHERE unit_id=?', (unit_id,)).fetchone()[0]
+            lesson['revision'] = latest + 1
             db.execute('UPDATE lessons SET data=? WHERE unit_id=?', (encode(lesson), unit_id))
-            db.execute('UPDATE progress SET block_index=0,version=version+1 WHERE course_id=? AND unit_id=?', (course_id, unit_id))
+            self._switch_position(db, course_id, unit_id, expected_revision, lesson['revision'])
+
+    @staticmethod
+    def _switch_position(db, course_id, unit_id, old_revision, new_revision):
+        db.execute("INSERT OR REPLACE INTO lesson_positions SELECT unit_id,?,block_index FROM progress "
+                   "WHERE course_id=? AND unit_id=?", (old_revision, course_id, unit_id))
+        db.execute("UPDATE progress SET block_index=COALESCE((SELECT block_index FROM lesson_positions "
+                   "WHERE unit_id=? AND revision=?),0),version=version+1 WHERE course_id=? AND unit_id=?",
+                   (unit_id, new_revision, course_id, unit_id))
+
+    def activate_depth(self, course_id, unit_id, depth, expected_revision):
+        self.unit(course_id, unit_id)
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT data FROM lessons WHERE unit_id=?", (unit_id,)).fetchone()
+            if not row:
+                return None
+            current = json.loads(row[0])
+            revision = current.get('revision', 0)
+            if revision != expected_revision:
+                raise AppError('讲义已变化，请刷新后切换', 'VERSION_CONFLICT', 409)
+            if current.get('depth') == depth and current.get('status','ready') == 'ready':
+                return current
+            cached = db.execute("SELECT revision,data FROM lesson_versions WHERE unit_id=? "
+                                "AND json_extract(data,'$.depth')=? AND COALESCE(json_extract(data,'$.status'),'ready')='ready' "
+                                "ORDER BY revision DESC LIMIT 1", (unit_id, depth)).fetchone()
+            if not cached:
+                return None
+            db.execute("INSERT OR IGNORE INTO lesson_versions VALUES(?,?,?)", (unit_id, revision, row[0]))
+            db.execute("UPDATE lessons SET data=? WHERE unit_id=?", (cached['data'], unit_id))
+            db.execute("DELETE FROM lesson_versions WHERE unit_id=? AND revision=?", (unit_id, cached['revision']))
+            self._switch_position(db, course_id, unit_id, revision, cached['revision'])
+            return json.loads(cached['data'])
+
 
     def lesson_versions(self, unit_id):
         with self.connection() as db:
@@ -221,6 +256,16 @@ class Store:
     def save_turn(self, turn_id, course_id, unit_id, data):
         with self.connection() as db:
             db.execute("INSERT OR REPLACE INTO turns VALUES(?,?,?,?,?)", (turn_id, course_id, unit_id, encode(data), time.time()))
+
+    def resumable_regeneration(self, payload):
+        with self.connection() as db:
+            row = db.execute("SELECT dedup_key FROM jobs WHERE kind='regenerate' "
+                             "AND status IN ('cancelled','failed','interrupted','queued','running') "
+                             "AND json_extract(payload,'$.course_id')=? AND json_extract(payload,'$.unit_id')=? "
+                             "AND json_extract(payload,'$.expected_revision')=? AND COALESCE(json_extract(payload,'$.depth'),'full')=? "
+                             "ORDER BY updated DESC LIMIT 1",
+                             (payload['course_id'],payload['unit_id'],payload['expected_revision'],payload['depth'])).fetchone()
+            return row[0] if row else None
 
     def new_job(self, key, kind, payload):
         with self.connection() as db:

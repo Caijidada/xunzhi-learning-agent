@@ -20,6 +20,8 @@ class LearningService:
         self.tasks: dict[str, asyncio.Task] = {}
 
     def submit(self, key, kind, payload):
+        if kind == 'regenerate':
+            key = self.store.resumable_regeneration(payload) or key
         job = self.store.new_job(key, kind, payload)
         if kind in {"prepare", "regenerate"} and job["status"] in {"cancelled", "interrupted", "failed"}:
             return self.retry(job["id"])
@@ -102,6 +104,9 @@ class LearningService:
             draft = previous
         else:
             lesson = await build_lesson(self, job_id, course, unit, payload.get('depth','full'))
+            if upgrade and previous.get("status", "ready") == "ready":
+                self.store.replace_lesson(course["id"], unit["id"], lesson, previous.get("revision", 0))
+                return {"unit_id": unit["id"]}
             draft = {**lesson, 'blocks':[], 'pending_blocks':lesson['blocks'], 'status':'generating'}
             self.store.save_lesson(unit['id'], draft)
         while draft["pending_blocks"]:

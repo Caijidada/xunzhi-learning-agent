@@ -16,7 +16,8 @@ export function useWorkspace() {
   const error = ref(''), loading = ref(true), view = ref('learn'), source = ref<Source|null>(null), selected = ref('')
   const message = ref(''), job = ref<Job|null>(null), minutes = ref(Number(localStorage.getItem('xunzhi.minutes')) || 15)
   const plan = ref<{tasks:{event_id?:string;title:string;description:string;minutes:number}[]}>({tasks:[]})
-  const busy = computed(() => !!job.value && ['queued','running'].includes(job.value.status))
+  const switchingDepth = ref(false)
+  const busy = computed(() => switchingDepth.value || !!job.value && ['queued','running'].includes(job.value.status))
   type WaitState = {id:string; status:string; message:string}
   const waiting = ref<Record<string,WaitState>>(JSON.parse(localStorage.getItem('xunzhi.lesson-waits') || '{}'))
   const waitKey = computed(() => course.value?.id + '/' + unit.value?.id)
@@ -63,6 +64,7 @@ export function useWorkspace() {
     if(!course.value) return
     const result = await api<{unit:Unit;lesson:Lesson|null;turns:Turn[]}>(`/courses/${course.value.id}/units/${id}`)
     unit.value = result.unit; lesson.value = (result.lesson?.status==='generating'?null:result.lesson); turns.value = result.turns; selected.value = ''; selectionBlock.value=null; locationNotice.value=''
+    if (result.lesson?.depth === 'quick' || result.lesson?.depth === 'full') depth.value=result.lesson.depth
     if (result.lesson?.status !== 'generating' && result.lesson && !waiting.value[course.value.id+'/'+id])
       rememberReading(course.value.id, id)
     if(restore) {
@@ -134,11 +136,32 @@ export function useWorkspace() {
       if(done.status==='completed') localStorage.removeItem('xunzhi.pending')
     } catch(e) { error.value = e instanceof Error ? e.message : '连接中断，重新打开后可以继续。' }
   }
+  async function switchDepth() {
+    const current = lesson.value, courseId = course.value?.id, unitId = unit.value?.id
+    const requested = depth.value
+    localStorage.setItem('xunzhi.depth',requested)
+    if (!current || !courseId || !unitId || current.depth === requested) return
+    switchingDepth.value=true
+    try {
+      const result=await api<{lesson:Lesson|null}>(`/courses/${courseId}/units/${unitId}/activate?depth=${requested}&revision=${current.revision??0}`,{method:'POST'})
+      if (!result.lesson || course.value?.id!==courseId || unit.value?.id!==unitId) return
+      lesson.value=result.lesson
+      selected.value=''
+      selectionBlock.value=null
+      await refreshCourse()
+      await nextTick()
+      const saved=course.value?.progress.block_index
+      if (saved) document.getElementById(`block-${saved}`)?.scrollIntoView({block:'center'})
+    } catch(e) {
+      if(current.depth==='quick'||current.depth==='full') depth.value=current.depth
+      error.value=e instanceof Error?e.message:'切换讲义失败，请重试'
+    } finally { switchingDepth.value=false }
+  }
   async function regenerate() {
     if(!course.value || !unit.value || busy.value) return
     await guard(async()=>{
       const context={courseId:course.value!.id,unitId:unit.value!.id,review:depth.value==='full'}
-      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:`lesson-${unit.value!.id}-${lesson.value?.revision??0}-${depth.value}`,expected_revision:lesson.value?.revision??0,depth:depth.value})})
+      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:requestId(),expected_revision:lesson.value?.revision??0,depth:depth.value})})
       await watchJob(j,context)
     })
   }
@@ -264,6 +287,6 @@ export function useWorkspace() {
     loading.value=false
   })
   onUnmounted(()=>{alive=false;clearTimeout(rewardTimeout);clearTimeout(stopTimeout)})
-  return {stoppedNotice,reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords:async()=>{await refreshCourse();await refreshPlan()},rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+  return {switchDepth,stoppedNotice,reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords:async()=>{await refreshCourse();await refreshPlan()},rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

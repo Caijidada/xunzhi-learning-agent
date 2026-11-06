@@ -9,7 +9,7 @@ import FocusTimer from './components/FocusTimer.vue'
 import { useWorkspace } from './useWorkspace'
 import { usePanels } from './usePanels'
 import type { Block } from './types'
-const {stoppedNotice,reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords,rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+const {switchDepth,stoppedNotice,reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords,rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
 const {leftCollapsed,rightCollapsed,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey}=usePanels()
 function toggleLeft(){leftCollapsed.value=!leftCollapsed.value;sidebar.value=!leftCollapsed.value}
@@ -43,7 +43,6 @@ const eventLabels:Record<string,string>={question:'学习提问',understood:'自
 async function handleFile(file?:File){if(!file)return;showUpload.value=false;await upload(file)}
 function onDrop(e:DragEvent){dragging.value=false;handleFile(e.dataTransfer?.files[0])}
 async function askCode(text:string, blockIndex:number|null=null){selectionBlock.value=blockIndex;rightCollapsed.value=false;selected.value=text.slice(0,3000);message.value='请逐行解释选中的代码，并说明它在这里的作用。';await nextTick();document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus()}
-function saveDepth(){localStorage.setItem('xunzhi.depth',depth.value)}
 function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 </script>
 
@@ -81,12 +80,12 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
             <span id="depth-label">学习方式</span>
             <div class="depth-switch" :class="{quick:depth==='quick'}" role="radiogroup" aria-labelledby="depth-label">
               <label v-for="option in [{value:'full',label:'完整学习'},{value:'quick',label:'快速学习'}]" :key="option.value">
-                <input type="radio" name="lesson-depth" :value="option.value" v-model="depth" @change="saveDepth">
+                <input type="radio" name="lesson-depth" :value="option.value" v-model="depth" @change="switchDepth" :disabled="busy">
                 <span>{{option.label}}</span>
               </label>
             </div>
-            <small v-if="lesson?.depth && lesson.depth!==depth">更新本节后生效</small>
-            <button v-if="lesson && health.model_configured" class="text-btn update-lesson" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>更新本节</button>
+            <small v-if="lesson?.depth && lesson.depth!==depth">当前显示{{lesson.depth==='full'?'完整':'快速'}}版</small>
+            <button v-if="lesson && health.model_configured" class="text-btn update-lesson" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>{{lesson.depth && lesson.depth!==depth ? (depth==='full'?'生成完整版':'生成快速版') : '更新本节'}}</button>
           </div>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p v-if="!reviewWait" class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>

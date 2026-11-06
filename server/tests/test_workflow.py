@@ -366,3 +366,13 @@ def test_review_keeps_question_location_and_original_exchange(client):
         assert latest['data'] == event['data'] and latest['review_status'] == status
         tasks = client.get(base+'/session-plan').json()['tasks']
         assert any(t['title']=='回到上次的疑问' for t in tasks) == (status=='pending')
+
+
+def test_start_button_resumes_cancelled_prepare(client):
+    store = client.app.state.store
+    payload = {'course_id':'course_demo','unit_id':'demo_unit_1','depth':'full'}
+    job = store.new_job('prepare:course_demo:demo_unit_1:extractive:full','prepare',payload)
+    store.update_job(job['id'],'cancelled')
+    resumed = client.post('/api/courses/course_demo/units/demo_unit_1/prepare?depth=full').json()
+    assert resumed['id'] == job['id']
+    assert wait_job(client, resumed['id'])['status'] == 'completed'

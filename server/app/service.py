@@ -21,6 +21,8 @@ class LearningService:
 
     def submit(self, key, kind, payload):
         job = self.store.new_job(key, kind, payload)
+        if kind in {"prepare", "regenerate"} and job["status"] in {"cancelled", "interrupted", "failed"}:
+            return self.retry(job["id"])
         if job["status"] == "queued" and job["id"] not in self.tasks:
             self.tasks[job["id"]] = asyncio.create_task(self._execute(job["id"]))
         return self.public_job(job)
@@ -45,6 +47,7 @@ class LearningService:
         task = self.tasks.get(job_id)
         if task:
             task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     async def close(self):
         pending = list(self.tasks.values())

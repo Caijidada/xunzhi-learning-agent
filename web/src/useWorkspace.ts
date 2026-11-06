@@ -10,6 +10,9 @@ export function useWorkspace() {
   const locationNotice = ref('')
   const rewardNotice = ref<{unitId:string; blockIndex:number; points:number} | null>(null)
   let rewardTimeout: ReturnType<typeof setTimeout> | undefined
+  const stoppedNotice = ref('')
+  let stopTimeout: ReturnType<typeof setTimeout> | undefined
+  let pollVersion = 0
   const error = ref(''), loading = ref(true), view = ref('learn'), source = ref<Source|null>(null), selected = ref('')
   const message = ref(''), job = ref<Job|null>(null), minutes = ref(Number(localStorage.getItem('xunzhi.minutes')) || 15)
   const plan = ref<{tasks:{event_id?:string;title:string;description:string;minutes:number}[]}>({tasks:[]})
@@ -59,7 +62,7 @@ export function useWorkspace() {
   async function loadUnit(id:string, restore=false) {
     if(!course.value) return
     const result = await api<{unit:Unit;lesson:Lesson|null;turns:Turn[]}>(`/courses/${course.value.id}/units/${id}`)
-    unit.value = result.unit; lesson.value = result.lesson; turns.value = result.turns; selected.value = ''; selectionBlock.value=null; locationNotice.value=''
+    unit.value = result.unit; lesson.value = (result.lesson?.status==='generating'?null:result.lesson); turns.value = result.turns; selected.value = ''; selectionBlock.value=null; locationNotice.value=''
     if (result.lesson?.status !== 'generating' && result.lesson && !waiting.value[course.value.id+'/'+id])
       rememberReading(course.value.id, id)
     if(restore) {
@@ -97,6 +100,7 @@ export function useWorkspace() {
   }
   async function bookmark(blockIndex:number) { if(unit.value) await guard(()=>savePosition(unit.value!.id,blockIndex)) }
   async function watchJob(initial:Job, context:{courseId?:string;unitId?:string;review?:boolean}={}) {
+    const version = ++pollVersion
     const key = context.courseId + '/' + context.unitId
     function updateWait(j:Job) {
       if (context.review) {
@@ -111,8 +115,10 @@ export function useWorkspace() {
     try {
       while(alive && ['queued','running'].includes(job.value.status)) {
         await new Promise(r=>setTimeout(r,900))
-        if(!alive) return
-        job.value = await api<Job>(`/jobs/${initial.id}`)
+        if(!alive || version !== pollVersion) return
+        const latest = await api<Job>(`/jobs/${initial.id}`)
+        if(version !== pollVersion) return
+        job.value = latest
         updateWait(job.value)
       }
       const done = job.value
@@ -132,7 +138,7 @@ export function useWorkspace() {
     if(!course.value || !unit.value || busy.value) return
     await guard(async()=>{
       const context={courseId:course.value!.id,unitId:unit.value!.id,review:depth.value==='full'}
-      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:requestId(),expected_revision:lesson.value?.revision??0,depth:depth.value})})
+      const j=await api<Job>(`/courses/${course.value!.id}/units/${unit.value!.id}/regenerate`,{method:'POST',body:JSON.stringify({request_id:`lesson-${unit.value!.id}-${lesson.value?.revision??0}-${depth.value}`,expected_revision:lesson.value?.revision??0,depth:depth.value})})
       await watchJob(j,context)
     })
   }
@@ -188,7 +194,21 @@ export function useWorkspace() {
   }
   async function openSource(id:string) { await guard(async()=>{source.value=await api<Source>(`/documents/${course.value!.document_id}/chunks/${id}`)}) }
   async function cancel() {
-    if(job.value) await guard(async()=>{job.value=await api<Job>(`/jobs/${job.value!.id}/cancel`,{method:'POST'})})
+    const active = job.value
+    if(!active) return
+    await guard(async () => {
+      const stopped = await api<Job>(`/jobs/${active.id}/cancel`,{method:'POST'})
+      if(stopped.status !== 'cancelled' || !['prepare','regenerate'].includes(active.kind) || job.value?.id !== active.id) return
+      ++pollVersion
+      job.value = stopped
+      for (const [key, state] of Object.entries(waiting.value)) {
+        if (state.id === active.id) setWait(key)
+      }
+      localStorage.removeItem('xunzhi.pending')
+      stoppedNotice.value = '已停止。下次开始时会接着已保存的部分继续。'
+      clearTimeout(stopTimeout)
+      stopTimeout = setTimeout(() => {stoppedNotice.value=''}, 2800)
+    })
   }
   async function retry() {
     if(!job.value || busy.value) return
@@ -243,7 +263,7 @@ export function useWorkspace() {
     })
     loading.value=false
   })
-  onUnmounted(()=>{alive=false;clearTimeout(rewardTimeout)})
-  return {reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords:async()=>{await refreshCourse();await refreshPlan()},rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+  onUnmounted(()=>{alive=false;clearTimeout(rewardTimeout);clearTimeout(stopTimeout)})
+  return {stoppedNotice,reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords:async()=>{await refreshCourse();await refreshPlan()},rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

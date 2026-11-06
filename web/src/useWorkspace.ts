@@ -5,7 +5,8 @@ import type { Course, CourseItem, Unit, Lesson, Turn, Job, Source, Progress, Lea
 export function useWorkspace() {
   const courses = ref<CourseItem[]>([]), course = ref<Course|null>(null), unit = ref<Unit|null>(null)
   const lesson = ref<Lesson|null>(null), turns = ref<Turn[]>([]), health = ref({api_revision:'',model_configured:false,model:'',provider:'DeepSeek'})
-  const rewardNotice = ref('')
+  const rewardNotice = ref<{unitId:string; blockIndex:number; points:number} | null>(null)
+  let rewardTimeout: ReturnType<typeof setTimeout> | undefined
   const error = ref(''), loading = ref(true), view = ref('learn'), source = ref<Source|null>(null), selected = ref('')
   const message = ref(''), job = ref<Job|null>(null), minutes = ref(Number(localStorage.getItem('xunzhi.minutes')) || 15)
   const plan = ref<{tasks:{title:string;description:string;minutes:number}[]}>({tasks:[]})
@@ -132,8 +133,13 @@ export function useWorkspace() {
   async function record(kind:string, text='', extras:Record<string,unknown>={}) {
     if(!course.value || !unit.value) return
     await guard(async()=>{
+      const unitId = unit.value!.id
       const result=await api<{xp_awarded:number}>(`/courses/${course.value!.id}/learning-events`,{method:'POST',body:JSON.stringify({request_id:requestId(),unit_id:unit.value!.id,kind,text,...extras})})
-      rewardNotice.value=result.xp_awarded?'答对了，经验 +1！':''
+      if (result.xp_awarded && typeof extras.block_index === 'number') {
+        clearTimeout(rewardTimeout)
+        rewardNotice.value = {unitId, blockIndex: extras.block_index, points: result.xp_awarded}
+        rewardTimeout = setTimeout(() => { rewardNotice.value = null }, 1300)
+      }
       await refreshCourse(); await refreshPlan()
     })
   }
@@ -163,7 +169,7 @@ export function useWorkspace() {
     })
     loading.value=false
   })
-  onUnmounted(()=>{alive=false})
+  onUnmounted(()=>{alive=false;clearTimeout(rewardTimeout)})
   return {rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
           guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,correct,openSource,cancel,retry,selectText,practiceFor,refreshPlan}
 }

@@ -39,7 +39,6 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
     </header>
 
     <div v-if="!loading && health.api_revision!=='learning-scenes-v1'" class="error-banner" role="alert">页面已更新，但后台服务仍是旧版本。请停止原项目进程，再运行 .venv/bin/python scripts/dev.py，然后刷新页面。</div>
-    <div v-if="rewardNotice" class="reward-toast" role="status">{{rewardNotice}}<button @click="rewardNotice=''" aria-label="关闭奖励提示">×</button></div>
     <div v-if="error" class="error-banner" role="alert"><CircleHelp :size="17"/><span>{{error}}</span><button class="icon-btn" @click="error=''" aria-label="关闭提示"><X :size="16"/></button></div>
     <div v-if="job && job.status!=='completed'" class="job-banner" :class="{'job-error':['failed','interrupted'].includes(job.status)}"><LoaderCircle v-if="busy" :size="15" class="spin"/><span>{{job.message||'正在准备…'}}</span><button v-if="busy" class="text-btn" @click="cancel">停止</button><button v-else-if="['failed','interrupted','cancelled'].includes(job.status)" class="text-btn" @click="retry"><RotateCcw :size="13"/>继续尝试</button></div>
 
@@ -69,6 +68,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
             <div class="reading-notice" v-if="health.model_configured"><span>已保存的讲解不会随重启改变。更新会保留旧版本与学习记录，并从本节开头阅读。</span><button class="text-btn" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>按新方式更新本节</button></div>
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
             <article v-for="(b,i) in lesson.blocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
+              <span v-if="rewardNotice?.unitId===unit.id && rewardNotice.blockIndex===i" class="earned-xp" role="status">经验 +{{ rewardNotice.points }}</span>
               <KnowledgeBlock :block="b" :recordable="true" :practice="practiceFor(i)" @source="openSource" @ask-code="askCode" @practice="(choice,usedHint)=>record('practice',b.body,{block_index:i,choice,used_hint:usedHint,lesson_revision:lesson?.revision??0})"/>
               <button class="save-position" @click.stop="bookmark(i)" :aria-label="`将阅读位置保存到${b.title}`"><Bookmark :size="12" :fill="course.progress.block_index===i?'currentColor':'none'"/>{{course.progress.block_index===i?'上次读到这里':'记住读到这里'}}</button>
             </article>

@@ -90,7 +90,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
           <p v-if="!reviewWait" class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
-          <PreparationReview v-if="reviewWait" :key="reviewWait.id" :course="course" :unit="unit" :state="reviewWait" @enter="enterPrepared" @cancel="cancel"/>
+          <PreparationReview v-if="reviewWait" :key="reviewWait.id" :course="course" :unit="unit" :state="reviewWait" @enter="enterPrepared" @cancel="cancel" @source="openSource"/>
           <template v-else-if="lesson">
 
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>

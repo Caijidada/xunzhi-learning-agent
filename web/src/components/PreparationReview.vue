@@ -1,14 +1,28 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
+import KnowledgeBlock from './KnowledgeBlock.vue'
 import {ArrowRight,BookOpen} from '@lucide/vue'
 import {recallCards, type RecallCard} from '../waitReview'
 import type {Course,Unit} from '../types'
 
 const props=defineProps<{course:Course;unit:Unit;state:{status:string;message:string}}>()
-defineEmits<{enter:[question:string];cancel:[]}>()
+defineEmits<{enter:[question:string];cancel:[];source:[id:string]}>()
 const cards=ref<RecallCard[]>([]), loaded=ref(false), index=ref(0), revealed=ref(false)
 const choice=ref<number|null>(null), response=ref(''), progress=ref(12)
 const card=computed(()=>cards.value[index.value])
+const readingIndex=ref<number|null>(null)
+const openButton=ref<HTMLButtonElement|null>(null), returnButton=ref<HTMLButtonElement|null>(null)
+async function openLocation() {
+  if (!card.value) return
+  readingIndex.value=card.value.blockIndex
+  await nextTick()
+  returnButton.value?.focus()
+}
+async function returnToCard() {
+  readingIndex.value=null
+  await nextTick()
+  openButton.value?.focus()
+}
 const ready=computed(()=>props.state.status==='completed')
 const batch=computed(()=>props.state.message?.match(/第 (\d+)\/(\d+) 部分/))
 const statusText=computed(()=>ready.value?'讲义已准备好':batch.value?`正在整理第 ${batch.value[1]} / ${batch.value[2]} 部分`:props.state.message||'正在准备讲义')
@@ -40,9 +54,15 @@ function move(delta:number){
   <section class="wait-review" aria-label="等待时复习">
     <header><span role="status">{{statusText}}</span><button v-if="!ready" class="text-btn" @click="$emit('cancel')">停止生成</button></header>
     <div class="wait-track" role="progressbar" :aria-label="statusText" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="ready?100:undefined"><i :style="{width:progress+'%'}"></i></div>
-    <template v-if="card">
+    <section v-if="card && readingIndex!==null" class="lesson-location" aria-label="知识点位置">
+      <header><small>{{card.chapter}} · 第 {{readingIndex+1}} / {{card.blocks.length}} 段</small><button ref="returnButton" class="text-btn" @click="returnToCard">返回当前复习卡</button></header>
+      <KnowledgeBlock :key="readingIndex" :block="card.blocks[readingIndex]" read-only @source="$emit('source',$event)"/>
+      <nav aria-label="查看知识点上下文"><button class="text-btn" :disabled="readingIndex===0" @click="readingIndex--">上一段</button><button class="text-btn" :disabled="readingIndex===card.blocks.length-1" @click="readingIndex++">下一段</button></nav>
+    </section>
+    <template v-else-if="card">
       <small>{{card.chapter}} · 复习 {{index+1}} / {{cards.length}}</small>
       <h2>{{card.prompt}}</h2>
+      <button ref="openButton" class="text-btn locate" @click="openLocation"><BookOpen :size="15"/>查看知识点位置</button>
       <div v-if="card.options" class="quiz-options"><button v-for="(option,i) in card.options" :key="i" :disabled="revealed" :class="{chosen:choice===i,correct:revealed&&i===card.correct,incorrect:revealed&&choice===i&&i!==card.correct}" @click="choice=i;revealed=true">{{option}}</button></div>
       <button v-if="!revealed" class="text-btn" @click="revealed=true">{{card.options?'查看答案':'回看讲解'}}</button>
       <div v-else class="recall-answer"><strong v-if="choice!==null">{{choice===card.correct?'答对了':'再看一下'}}</strong><p>{{card.answer}}</p></div>
@@ -67,6 +87,8 @@ h2 {font-size:1.2rem;line-height:1.6;margin:.6rem 0 1rem}
 .recall-answer {background:#f1f5eb;padding:14px;border-radius:8px;max-height:45vh;overflow:auto}
 .recall-answer p {white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
 nav,footer {margin-top:18px}
+.locate {margin-bottom:14px}
+.lesson-location header {margin-bottom:20px;flex-wrap:wrap}
 textarea {width:100%;border:1px solid #c9d8c6;border-radius:8px;padding:10px}
 @media(prefers-reduced-motion:reduce){.wait-track i{transition:none}}
 </style>

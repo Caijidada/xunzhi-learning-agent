@@ -15,3 +15,5 @@ artifacts/
 
 # Local planning and development notes
 /docs/*.md
+/research_notes/
+/reports/

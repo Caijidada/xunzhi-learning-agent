@@ -22,7 +22,9 @@ function openReviewTask(id:string) {
   const event = activeEvents.value.find(item => item.id === id)
   if (event) revisit(event)
 }
-const understanding=computed(()=>activeEvents.value.some(e=>e.unit_id===unit.value?.id&&e.kind==='understood'))
+const understanding=computed(()=>course.value?.units.find(u=>u.id===unit.value?.id)?.understood)
+const finishedUnits=computed(()=>learningUnits.value.filter(u=>u.understood).length)
+const bookPercent=computed(()=>learningUnits.value.length ? Math.floor(finishedUnits.value*100/learningUnits.value.length) : 0)
 const nextLearningUnit=computed(()=>course.value?.units.slice(index.value+1).find(u=>u.category==='learn'||!u.category))
 const modeLabel=computed(()=>lesson.value?.mode==='ai'?'AI 讲解':lesson.value?.mode==='demo'?'内置体验材料':'原文导读')
 const indexedBlocks = computed(() => (lesson.value?.blocks ?? []).map((block, index) => ({block, index})))
@@ -62,7 +64,11 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
     <div v-if="loading" class="initial-loading"><span class="brand-symbol"><Layers3 :size="28"/></span><p>打开你的学习空间…</p><LoaderCircle class="spin" :size="20"/></div>
 
     <template v-else-if="view==='learn'&&course">
-      <div class="workspace-heading"><div class="breadcrumbs"><button class="icon-btn mobile-menu" @click="toggleLeft" aria-label="展开学习目录"><Menu :size="19"/></button><span>我的学习</span><ChevronRight :size="13"/><span>{{course.title}}</span></div><div class="panel-controls"><button class="text-btn" @click="toggleLeft" :aria-expanded="!leftCollapsed">{{leftCollapsed?'展开目录':'收起目录'}}</button><button class="text-btn" @click="rightCollapsed=!rightCollapsed" :aria-expanded="!rightCollapsed">{{rightCollapsed?'展开问答':'收起问答'}}</button></div></div>
+      <div class="workspace-heading"><div class="breadcrumbs"><button class="icon-btn mobile-menu" @click="toggleLeft" aria-label="展开学习目录"><Menu :size="19"/></button><span>我的学习</span><ChevronRight :size="13"/><span>{{course.title}}</span></div><div class="book-progress" title="按已标记「我理解了」的正文小节计算">
+        <span>全书进度</span>
+        <div class="book-track" role="progressbar" aria-label="全书学习进度" aria-valuemin="0" :aria-valuemax="learningUnits.length || 1" :aria-valuenow="finishedUnits" :aria-valuetext="`已完成 ${finishedUnits} 节，共 ${learningUnits.length} 节正文`"><i :style="{width:bookPercent+'%'}"></i></div>
+        <span class="book-count">{{finishedUnits}} / {{learningUnits.length}} 节 · {{bookPercent}}%</span>
+      </div><div class="panel-controls"><button class="text-btn" @click="toggleLeft" :aria-expanded="!leftCollapsed">{{leftCollapsed?'展开目录':'收起目录'}}</button><button class="text-btn" @click="rightCollapsed=!rightCollapsed" :aria-expanded="!rightCollapsed">{{rightCollapsed?'展开问答':'收起问答'}}</button></div></div>
       <div class="workspace-layout" :class="{'left-collapsed':leftCollapsed,'right-collapsed':rightCollapsed}" :style="{'--right-size':rightWidth+'px'}">
         <aside class="course-sidebar" :class="{open:sidebar}">
           <div class="sidebar-label">你的学习路径 <button class="icon-btn" @click="leftCollapsed=true;sidebar=false" aria-label="收起目录"><PanelLeftClose :size="16"/></button></div>
@@ -110,7 +116,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
                 </section>
               </details>
             </details>
-            <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
+            <div class="lesson-footer"><div><span class="eyebrow">TAKE YOUR TIME</span><h3>这一小步，理解了吗？</h3><p>可以再问一次，也可以按自己的节奏继续。</p></div><div class="completion-actions"><button class="button" :class="{understood:understanding}" :disabled="understanding" @click="record('understood','用户表示已理解本节内容')"><Check :size="16"/>{{understanding?'已记录你的理解':'我理解了'}}</button><button class="button primary" v-if="nextLearningUnit" @click="selectUnit(nextLearningUnit)">继续下一节 <ArrowRight :size="16"/></button></div></div>
           </template>
           <div v-else class="prepare-card"><span class="round-icon"><Sparkles :size="27"/></span><h2>只准备你现在想学的</h2><p>从这一节开始，保留来源，慢慢往前走。<br/>{{health.model_configured?'DeepSeek 会根据原文准备本节讲解。':'当前可先阅读原文，连接模型后再生成讲解。'}}</p><button class="button primary" @click="prepare" :disabled="busy"><LoaderCircle v-if="busy" class="spin" :size="17"/><BookOpen v-else :size="17"/>{{busy?'正在准备…':'开始这一节'}}</button></div>
           <p class="footer-note">由你决定下一步 · 练习不会限制章节进度</p>

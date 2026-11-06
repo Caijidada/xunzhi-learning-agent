@@ -414,3 +414,14 @@ def test_truncated_lesson_reports_batch(tmp_path):
         failure=wait_job(c,job['id'])['error']
         assert failure['code']=='OUTPUT_INVALID' and len(attempts)==2
         assert '第 1/1 批' in failure['message'] and '输出长度上限' in failure['message']
+
+
+def test_book_progress_survives_recent_event_window(client):
+    store=client.app.state.store
+    for i in range(2):
+        store.add_event('course_demo','demo_unit_1','understood',{},f'completion-{i}')
+    for i in range(101):
+        store.add_event('course_demo','demo_unit_2','note',{},f'book-note-{i}')
+    course=client.get('/api/courses/course_demo').json()
+    assert all(e['kind']=='note' for e in course['events'])
+    assert [u['id'] for u in course['units'] if u['understood']]==['demo_unit_1']

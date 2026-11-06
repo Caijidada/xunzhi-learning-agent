@@ -182,7 +182,8 @@ class LearningService:
             self.store.put('courses',course_id,course)
         xp=self.store.experience(course_id)
         level=next(l for l in reversed(course['reward_levels']) if xp>=l['required_xp'])
-        return {**course, "units": route_units(course, self.store.units(course_id)), "progress": self.store.progress(course_id),
+        understood = self.store.understood_units(course_id)
+        return {**course, "units": [{**u, "understood": u["id"] in understood} for u in units], "progress": self.store.progress(course_id),
                 "document": {k: v for k, v in doc.items() if k != "path"}, "events": self.store.events(course_id),
                 'rewards':{'xp':xp,**level,'levels':course['reward_levels']}}
 

@@ -42,3 +42,12 @@
 }
 
 .stop-notice { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:50; background:#345747; color:white; padding:10px 18px; border-radius:12px; pointer-events:none; }
+.book-progress { display:flex; align-items:center; gap:10px; flex:1 1 290px; max-width:430px; min-width:160px; margin-inline:clamp(12px,3vw,42px); color:#4e6658; font-size:12px; white-space:nowrap; }
+.book-track { flex:1; height:6px; overflow:hidden; border-radius:9px; background:#dde5d7; }
+.book-track i { display:block; height:100%; border-radius:inherit; background:#5b8266; transition:width var(--slide); }
+.book-count { font-variant-numeric:tabular-nums; }
+@media(max-width:740px) {
+  .workspace-heading { flex-wrap:wrap; padding-block:8px; }
+  .book-progress { order:3; flex-basis:100%; max-width:none; min-width:0; margin-inline:0; font-size:11px; }
+}
+@media(prefers-reduced-motion:reduce){ .book-track i {transition:none} }

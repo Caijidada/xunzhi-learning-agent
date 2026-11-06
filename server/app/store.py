@@ -206,6 +206,12 @@ class Store:
             db.execute("INSERT INTO requests VALUES(?,?)", (request_key, encode({"request": req.model_dump(), "result": result})))
         return result
 
+    def understood_units(self, course_id):
+        with self.connection() as db:
+            rows = db.execute("SELECT DISTINCT unit_id FROM events WHERE course_id=? "
+                              "AND kind='understood' AND superseded=0", (course_id,))
+            return {row[0] for row in rows}
+
     def events(self, course_id):
         with self.connection() as db:
             rows = db.execute("SELECT e.*, r.status AS review_status,r.note AS review_note FROM events e LEFT JOIN reviews r ON r.event_id=e.id WHERE course_id=? AND superseded=0 ORDER BY created DESC LIMIT 100", (course_id,)).fetchall()

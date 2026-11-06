@@ -81,9 +81,11 @@ function fromPassage(body: string, chapter: string) {
     const line = raw.replace(/\*\*/g,'').trim()
     const condition = line.match(/^(如果|当|若)(.{4,80}?)[，,](.{8,260})$/)
     if (condition) return {prompt:`在「${chapter}」中，${condition[1]}${condition[2]}，接下来会发生什么？`, answer:line}
-    const definition = line.match(/^([\p{L}\d][\p{L}\d ()（）_-]{0,30})[：:](.{8,350})$/u)
-    if (definition && !/示例|小结|提示|范围|总结|注意|结论|步骤|本节|本批|^例如$/.test(definition[1])) {
-      return {prompt:`在「${chapter}」的语境中，怎样向别人解释「${definition[1]}」？请说出它的含义，并用本节的细节说明。`, answer:line}
+    // Require a marked term and an actual explanatory sentence; a colon can also introduce dialogue.
+    const definition = raw.trim().match(/^\*\*([^：:。！？]{1,32})[：:]([^*]{2,120})\*\*\s*(.{8,300})$/u)
+    if (definition && !/示例|小结|提示|范围|总结|注意|结论|步骤|本节|本批|例如/.test(definition[1])) {
+      const detail = definition[3].trim()
+      if (!detail.includes(definition[1])) return {prompt:`「${detail}」在「${chapter}」中，这段描述指的是哪个概念？哪条线索支持你的判断？`, answer:line}
     }
   }
 }

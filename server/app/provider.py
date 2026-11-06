@@ -56,6 +56,8 @@ class ModelGateway:
                     value = schema.model_validate_json(text)
                     allowed = {s["id"] for s in context.get("sources", [])}
                     for block in getattr(value, 'blocks', []):
+                        if block.type == 'diagram':
+                            raise ValueError('新输出不使用顺序高亮步骤图，请用 scene 或文字代码解释')
                         if not set(block.source_ids).issubset(allowed):
                             raise ValueError("引用 ID 不在提供的材料中")
                         if not block.source_ids and getattr(value, "action", "") != "clarify":
@@ -71,5 +73,5 @@ class ModelGateway:
                                                "duration_ms": round((time.monotonic() - started) * 1000), "usage": usage}
                 except (ValidationError, ValueError, KeyError, IndexError, TypeError):
                     # A single bounded schema repair. Never log provider bodies (they may contain private text).
-                    messages.append({"role": "user", "content": "上次输出未通过结构或来源校验。请重新输出严格 json，遵循 schema，给所有内容提供 sources 中真实的 source_ids。"})
+                    messages.append({"role": "user", "content": "上次输出未通过结构或来源校验。请重新输出严格 json，遵循 schema，教学内容引用 sources 中真实的 source_ids。不要生成 diagram 类型：适合演示时用 scene，否则用文字或代码。"})
         raise AppError("生成内容未通过结构或引用检查，请重试", "OUTPUT_INVALID", 502)

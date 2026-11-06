@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { BookOpen, Check, Lightbulb, ArrowRight } from '@lucide/vue'
-import StepDiagram from './StepDiagram.vue'
 import ScenePlayer from './ScenePlayer.vue'
 import CodeReader from './CodeReader.vue'
 import type { Block } from '../types'
@@ -24,7 +23,7 @@ function submit(){if(selected.value===null)return;submitted.value=true;emit('pra
       <details v-else-if="block.type==='source'" class="original-text"><summary>展开完整原文（包括提取到的代码）</summary><pre>{{block.body}}</pre></details>
       <div v-else class="prose" v-html="html"></div>
       <template v-if="block.type==='scene' && block.scene"><button v-if="compact" class="button primary small" @click="emit('scene',block)">打开演示区 <ArrowRight :size="14"/></button><ScenePlayer v-else :scene="block.scene"/></template>
-      <StepDiagram v-if="block.type==='diagram' && block.steps?.length" :steps="block.steps"/>
+      <div v-if="block.type==='diagram' && block.steps?.length" class="legacy-steps"><small>步骤说明 · 旧内容</small><ol><li v-for="(s,i) in block.steps" :key="i"><strong>{{s.label}}</strong><p>{{s.detail}}</p></li></ol></div>
       <template v-if="block.type==='quiz'">
         <div class="quiz-options"><button v-for="(option,i) in block.options" :key="i" :disabled="submitted" :class="{chosen:selected===i,correct:submitted&&i===block.answer,incorrect:submitted&&selected===i&&!correct}" @click="selected=i"><span>{{String.fromCharCode(65+i)}}</span>{{option}}<Check v-if="submitted&&i===block.answer" :size="16"/></button></div>
         <div v-if="!submitted" class="quiz-actions"><button class="button primary small" :disabled="selected===null" @click="submit">看看我的理解 <ArrowRight :size="14"/></button><button class="text-btn" @click="hint=!hint">{{hint?'收起提示':'给我一点提示'}}</button></div>

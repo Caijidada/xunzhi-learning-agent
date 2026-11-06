@@ -12,3 +12,6 @@ web/node_modules/
 web/dist/
 web/*.tsbuildinfo
 artifacts/
+
+# Local planning and development notes
+/docs/*.md

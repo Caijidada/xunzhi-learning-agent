@@ -99,4 +99,4 @@ npm --prefix web run build
 
 </details>
 
-[开发进度](docs/开发进度.md) · [教学策略验收](docs/教学策略验收.md) · [开源借鉴记录](THIRD_PARTY_NOTICES.md)
+[开源借鉴记录](THIRD_PARTY_NOTICES.md)

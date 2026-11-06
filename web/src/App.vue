@@ -4,11 +4,12 @@ import { BookOpen, ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Up
 import KnowledgeBlock from './components/KnowledgeBlock.vue'
 import ReviewCard from './components/ReviewCard.vue'
 import SceneDialog from './components/SceneDialog.vue'
+import PreparationReview from './components/PreparationReview.vue'
 import FocusTimer from './components/FocusTimer.vue'
 import { useWorkspace } from './useWorkspace'
 import { usePanels } from './usePanels'
 import type { Block } from './types'
-const {selectionBlock,locationNotice,revisit,reloadRecords,rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
+const {reviewWait,enterPrepared,selectionBlock,locationNotice,revisit,reloadRecords,rewardNotice,depth,regenerate,showExtras,learningUnits,curate,courses,course,unit,lesson,turns,health,error,loading,view,source,selected,message,job,minutes,plan,busy,index,chapters,
   guard,openCourse,selectUnit,bookmark,prepare,send,upload,record,openSource,cancel,retry,selectText,practiceFor,refreshPlan}=useWorkspace()
 const {leftCollapsed,rightCollapsed,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey}=usePanels()
 function toggleLeft(){leftCollapsed.value=!leftCollapsed.value;sidebar.value=!leftCollapsed.value}
@@ -56,7 +57,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
 
     <div v-if="!loading && health.api_revision!=='learning-scenes-v1'" class="error-banner" role="alert">页面已更新，但后台服务仍是旧版本。请停止原项目进程，再运行 .venv/bin/python scripts/dev.py，然后刷新页面。</div>
     <div v-if="error" class="error-banner" role="alert"><CircleHelp :size="17"/><span>{{error}}</span><button class="icon-btn" @click="error=''" aria-label="关闭提示"><X :size="16"/></button></div>
-    <div v-if="job && job.status!=='completed'" class="job-banner" :class="{'job-error':['failed','interrupted'].includes(job.status)}"><LoaderCircle v-if="busy" :size="15" class="spin"/><span>{{job.message||'正在准备…'}}</span><button v-if="busy" class="text-btn" @click="cancel">停止</button><button v-else-if="['failed','interrupted','cancelled'].includes(job.status)" class="text-btn" @click="retry"><RotateCcw :size="13"/>继续尝试</button></div>
+    <div v-if="!(reviewWait && reviewWait.id===job?.id && view==='learn') && job && job.status!=='completed'" class="job-banner" :class="{'job-error':['failed','interrupted'].includes(job.status)}"><LoaderCircle v-if="busy" :size="15" class="spin"/><span>{{job.message||'正在准备…'}}</span><button v-if="busy" class="text-btn" @click="cancel">停止</button><button v-else-if="['failed','interrupted','cancelled'].includes(job.status)" class="text-btn" @click="retry"><RotateCcw :size="13"/>继续尝试</button></div>
 
     <div v-if="loading" class="initial-loading"><span class="brand-symbol"><Layers3 :size="28"/></span><p>打开你的学习空间…</p><LoaderCircle class="spin" :size="20"/></div>
 
@@ -75,7 +76,7 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
         <main class="lesson-content" v-if="unit" @mouseup="selectText">
           <div class="lesson-kicker"><span class="pill">{{modeLabel}}</span><span><Clock3 :size="13"/>约 {{unit.minutes}} 分钟</span><span>{{index+1}} / {{course.units.length}} 节</span></div>
           <h1>{{unit.title}}</h1><p v-if="locationNotice" role="status">{{locationNotice}}</p>
-          <div class="learning-mode">
+          <div v-if="!reviewWait" class="learning-mode">
             <span id="depth-label">学习方式</span>
             <div class="depth-switch" :class="{quick:depth==='quick'}" role="radiogroup" aria-labelledby="depth-label">
               <label v-for="option in [{value:'full',label:'完整学习'},{value:'quick',label:'快速学习'}]" :key="option.value">
@@ -87,9 +88,10 @@ function formatTime(t:number){return new Date(t*1000).toLocaleString('zh-CN',{mo
             <button v-if="lesson && health.model_configured" class="text-btn update-lesson" @click="regenerate" :disabled="busy"><RotateCcw :size="14"/>更新本节</button>
           </div>
           <div v-if="unit.category && unit.category!=='learn'" class="reading-notice"><span>{{unit.category==='skip'?'这部分默认不纳入学习路径。':'这部分作为可选导读。'}} {{unit.reason}}</span><button v-if="nextLearningUnit" class="text-btn" @click="selectUnit(nextLearningUnit)">直接进入正文 <ArrowRight :size="14"/></button></div>
-          <p class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
+          <p v-if="!reviewWait" class="lesson-summary">{{lesson?.summary||'这一节还没有准备。开始时，我们再把它整理成易于消化的内容。'}}</p>
           <div class="lesson-divider"><span></span><Leaf :size="15"/><span></span></div>
-          <template v-if="lesson">
+          <PreparationReview v-if="reviewWait" :key="reviewWait.id" :course="course" :unit="unit" :state="reviewWait" @enter="enterPrepared" @cancel="cancel"/>
+          <template v-else-if="lesson">
 
             <div v-if="lesson.mode==='extractive'" class="reading-notice"><FileText :size="17"/><span>以下是材料原文，保留真实出处。{{health.model_configured?'可以把这一节整理为 AI 讲解。':'连接 DeepSeek 后可获得重新讲解与按需演示。'}}</span><button v-if="health.model_configured" class="text-btn" @click="prepare" :disabled="busy">准备讲解 <ArrowRight :size="14"/></button><button v-else class="text-btn" @click="showSettings=true">连接模型</button></div>
             <article v-for="{block:b,index:i} in teachingBlocks" :key="`${unit.id}-${lesson.mode}-${lesson.revision??0}-${i}`" :id="`block-${i}`" class="lesson-card" :class="{'saved-block':course.progress.block_index===i}">
